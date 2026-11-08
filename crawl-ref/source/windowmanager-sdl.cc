@@ -497,6 +497,15 @@ int SDLWrapper::init(coord_def *m_windowsz)
     SDL_SetHint(SDL_HINT_ANDROID_SEPARATE_MOUSE_AND_TOUCH, "1");
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "1");
 #endif
+#ifdef USE_GL_CORE
+    // The shader-based renderer in glwrapper-ogl.cc needs OpenGL 3.3 core.
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,
+                        SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS,
+                        SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+#endif
 
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     glDebug("SDL_GL_DOUBLEBUFFER");

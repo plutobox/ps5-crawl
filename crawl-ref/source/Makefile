@@ -749,6 +749,12 @@ ifdef GLES
 DEFINES_L += -DUSE_GLES
 endif
 
+# GL_CORE=y uses the shader-based OpenGL 3.3 core profile renderer instead of
+# the fixed-function pipeline (needed on platforms without legacy OpenGL).
+ifdef GL_CORE
+DEFINES_L += -DUSE_GL_CORE
+endif
+
 ifndef NO_PKGCONFIG
 
 # If pkg-config is available, it's the surest way to find where

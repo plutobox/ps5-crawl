@@ -35,9 +35,40 @@ public:
                               int xoffset=-1, int yoffset=-1) override;
     int logical_to_device(int n) const override;
     int device_to_logical(int n, bool round=true) const override;
+
+#ifdef USE_GL_CORE
+    // Core-profile only: upload vertex data to the streaming buffers and
+    // draw it with the current state.
+    void draw_stream(drawing_modes prim,
+                     const vector<GLW_3VF> &pos,
+                     const vector<GLW_2VF> *tex,
+                     const vector<VColour> *col,
+                     const vector<unsigned short int> &ind);
+#endif
 protected:
     GLState m_current_state;
     int m_window_height;
+
+#ifdef USE_GL_CORE
+    void init_core_profile();
+    void upload_transform();
+
+    unsigned int m_program = 0;
+    unsigned int m_vao = 0;
+    unsigned int m_vbo_pos = 0;
+    unsigned int m_vbo_tex = 0;
+    unsigned int m_vbo_col = 0;
+    unsigned int m_ibo = 0;
+    int m_loc_proj = -1;
+    int m_loc_trans = -1;
+    int m_loc_scale = -1;
+    int m_loc_use_texture = -1;
+    int m_loc_alpha_test = -1;
+    int m_loc_alpha_ref = -1;
+    float m_proj[16];
+    GLW_3VF m_trans {0, 0, 0};
+    GLW_3VF m_scale {1, 1, 1};
+#endif
     // optional, possibly nullptr function pointer to OpenGL 3+ function
     // The function pointer type is often ifdef'd in annoying headers
     // So we save the cast for the point where we use it, rather than

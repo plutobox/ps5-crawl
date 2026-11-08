@@ -65,6 +65,9 @@
 #
 #    LINUXDEPLOY   -- path to linuxdeploy tool, required for AppImage builds
 #    ANDROID       -- perform an Android build (see docs/develop/android.txt)
+#    PS5           -- perform a PS5 homebrew build with the ps5-payload-sdk
+#                     (https://github.com/ps5-payload-dev/sdk). Set
+#                     PS5_PAYLOAD_SDK if it isn't in /opt/ps5-payload-sdk.
 #
 # For various mac build tricks oriented at release builds see the various
 # mac-app-* targets as well as the crawl-universal target. (For normal dev
@@ -203,6 +206,24 @@ export uname_S
 #
 # Platform Detection
 #
+ifdef PS5
+	# Tiles with the core profile renderer, linked against the SDL2, Mesa
+	# and other libraries that ship with the ps5-payload-sdk. Lua and SQLite
+	# come from contrib, as the SDK has no pkg-config entry for SQLite.
+	PS5_PAYLOAD_SDK ?= /opt/ps5-payload-sdk
+	CROSSHOST := x86_64-ps5
+	TILES := y
+	GL_CORE := y
+	BUILD_LUA := y
+	BUILD_SQLITE := y
+	COPY_FONTS := y
+	# SDL2_image is a static library that needs libwebp.
+	EXTRA_LIBS += -lwebpdemux -lwebp -lsharpyuv
+	prefix ?= /data/crawl
+	DATADIR ?= data
+	SAVEDIR ?= saves
+endif
+
 uname_S := $(shell sh -c 'uname -s 2>/dev/null || echo not')
 uname_M := $(shell sh -c 'uname -m 2>/dev/null || echo not')
 
@@ -212,7 +233,9 @@ ARCH := $(HOST)
 ifdef CROSSHOST
 	# XX is there a way of integrating this with mac cross-compiling?
 	ARCH := $(CROSSHOST)
-	ifneq (,$(shell which $(ARCH)-pkg-config 2>/dev/null))
+	ifdef PS5
+	  PKGCONFIG = $(PS5_PAYLOAD_SDK)/bin/prospero-pkg-config
+	else ifneq (,$(shell which $(ARCH)-pkg-config 2>/dev/null))
 	  PKGCONFIG = $(ARCH)-pkg-config
 	else
 	  ifneq (,$(wildcard /usr/$(ARCH)/lib/pkgconfig))
@@ -544,6 +567,14 @@ AR := $(CROSSHOST)-ar
 RANLIB := $(CROSSHOST)-ranlib
 STRIP := $(CROSSHOST)-strip
 WINDRES := $(CROSSHOST)-windres
+
+ifdef PS5
+GCC := $(PS5_PAYLOAD_SDK)/bin/prospero-clang
+GXX := $(PS5_PAYLOAD_SDK)/bin/prospero-clang++
+AR := $(PS5_PAYLOAD_SDK)/bin/prospero-ar
+RANLIB := $(PS5_PAYLOAD_SDK)/bin/prospero-ranlib
+STRIP := $(PS5_PAYLOAD_SDK)/bin/prospero-strip
+endif
 
 endif
 

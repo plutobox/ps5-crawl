@@ -1,0 +1,107 @@
+name: PS5 build
+
+# Builds the PS5 homebrew version of Crawl with the ps5-payload-sdk, uploads
+# it as a workflow artifact, and attests its build provenance so that anyone
+# (including the ProsperoStore release scan) can verify with
+#   gh attestation verify <file> --repo plutobox/ps5-crawl
+# that the file was built by this workflow from this repository.
+#
+# Pushing a tag that starts with "ps5-" also publishes a GitHub release with
+# the attested zip attached.
+
+on:
+  push:
+    branches: [ps5-port]
+    tags: ['ps5-*']
+  pull_request:
+    branches: [ps5-port]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ps5-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Prebuilt ps5-payload-sdk with SDL2, Mesa, freetype, libpng, etc.
+  PS5_SDK_URL: https://github.com/ps5-payload-dev/pacbrew-repo/releases/download/v0.41.1/ps5-payload-dev.tar.gz
+  PS5_SDK_SHA256: e811bc2e4676c5bb7f80a8fe928d2985dce599996a5ca6b54da3e72699287887
+  PS5_PAYLOAD_SDK: /opt/ps5-payload-sdk
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write       # create releases on ps5-* tags
+      id-token: write       # sign the provenance attestation
+      attestations: write   # store the attestation
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          # Crawl's version comes from `git describe`, which needs history
+          # and tags; skip file contents of old commits to keep it fast.
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Check out contrib submodules
+        run: >
+          git submodule update --init --depth 1
+          crawl-ref/source/contrib/lua
+          crawl-ref/source/contrib/sqlite
+          crawl-ref/source/contrib/fonts
+
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang-18 lld-18 pkg-config python3-yaml bison flex zip
+
+      - name: Install ps5-payload-sdk
+        run: |
+          curl -fsSL -o /tmp/ps5-payload-dev.tar.gz "$PS5_SDK_URL"
+          echo "$PS5_SDK_SHA256  /tmp/ps5-payload-dev.tar.gz" | sha256sum -c -
+          sudo tar xzf /tmp/ps5-payload-dev.tar.gz -C /
+          rm /tmp/ps5-payload-dev.tar.gz
+
+      - name: Build
+        working-directory: crawl-ref/source
+        run: |
+          make -j"$(nproc)" PS5=y install DESTDIR="$RUNNER_TEMP/stage"
+          echo "CRAWL_VERSION=$(git describe)" >> "$GITHUB_ENV"
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp "$RUNNER_TEMP/stage/data/crawl/bin/crawl" dist/crawl-ps5.elf
+          (cd "$RUNNER_TEMP/stage" && zip -qr "$GITHUB_WORKSPACE/dist/crawl-ps5.zip" .)
+          (cd dist && sha256sum crawl-ps5.elf crawl-ps5.zip | tee SHA256SUMS)
+
+      - name: Attest build provenance
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            dist/crawl-ps5.elf
+            dist/crawl-ps5.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: crawl-ps5-${{ env.CRAWL_VERSION }}
+          path: dist/
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/ps5-')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/crawl-ps5.zip dist/crawl-ps5.elf dist/SHA256SUMS \
+            --prerelease \
+            --title "Crawl for PS5 $GITHUB_REF_NAME" \
+            --notes "Dungeon Crawl Stone Soup $CRAWL_VERSION built for PS5 homebrew.
+
+          Provenance: \`gh attestation verify crawl-ps5.zip --repo $GITHUB_REPOSITORY\`"

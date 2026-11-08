@@ -57,7 +57,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            clang-18 lld-18 pkg-config python3-yaml bison flex zip
+            clang-18 lld-18 pkg-config python3-yaml bison flex zip \
+            libpng-dev zlib1g-dev
 
       - name: Install ps5-payload-sdk
         run: |

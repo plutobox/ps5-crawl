@@ -4,7 +4,7 @@ A port of [Dungeon Crawl Stone Soup](https://crawl.develz.org/) to jailbroken
 PS5 consoles. It runs as a native title (`PPSA92041`) with the tiles
 graphics, and is played with the DualSense.
 
-This is the `ps5-port` branch of a Crawl fork. The upstream Crawl readme is
+This is the `ps5` branch of a Crawl fork. The upstream Crawl readme is
 [`README.md`](../README.md) at the root. The PS5 code lives in
 [`crawl-ref/source/ps5/`](../crawl-ref/source/ps5) and behind
 `USE_PS5_NATIVE` in the game's source.
@@ -82,11 +82,11 @@ bash ps5/package-native.sh --build   # -> build-ps5/app/dist/PPSA92041{,.zip}
 **Releasing.** The homebrew catalog tells consoles an update exists by
 comparing `contentVersion` in [`sce_sys/param.json`](../sce_sys/param.json)
 (`NN.NNN.NNN`), so every release raises it and is tagged with it. Run the
-**PS5 Build and Release** workflow by hand on `ps5-port` with `release` set to
+**PS5 Build and Release** workflow by hand on `ps5` with `release` set to
 `patch`, `minor` or `major`:
 
 ```sh
-gh workflow run ps5.yml --repo plutobox/ps5-crawl --ref ps5-port -f release=patch
+gh workflow run ps5.yml --repo plutobox/ps5-crawl --ref ps5 -f release=patch
 ```
 
 It raises the version, builds, commits the bump, tags it and publishes the

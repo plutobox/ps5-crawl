@@ -6,7 +6,7 @@ name: PS5 Build and Release
 # crawl-ref/source/ps5/content-version.py enforces them.
 #
 # - Every push and pull request: build both, kept as CI artifacts.
-# - Run it by hand on ps5-port with "release" set to patch, minor or major:
+# - Run it by hand on ps5 with "release" set to patch, minor or major:
 #   raise contentVersion, build the title from that, then commit the bump, tag
 #   it with the new version and publish the release, in that order, so a
 #   failed build leaves nothing behind. "current" releases the committed
@@ -153,8 +153,8 @@ jobs:
             $cv check "$version"
             echo "RELEASE_TAG=$version" >> "$GITHUB_ENV"
           elif [[ "$RELEASE" != none ]]; then
-            [[ "$GITHUB_REF" == refs/heads/ps5-port ]] || {
-              echo "::error::release from the ps5-port branch, not $GITHUB_REF"
+            [[ "$GITHUB_REF" == refs/heads/ps5 ]] || {
+              echo "::error::release from the ps5 branch, not $GITHUB_REF"
               exit 1
             }
             version=$($cv bump "$RELEASE")
@@ -243,7 +243,7 @@ jobs:
           NOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.notes || '' }}
         # The catalog shows these as the app's release notes: what changed
         # first, short headings and bullet lists, no images or links. The
-        # commits are ps5-port's own (first parent), not merged upstream ones.
+        # commits are ps5's own (first parent), not merged upstream ones.
         run: |
           previous=$(git tag --list '[0-9][0-9].[0-9][0-9][0-9].[0-9][0-9][0-9]' --sort=-v:refname \
             | grep -vx "$RELEASE_TAG" | head -n 1 || true)
@@ -273,9 +273,9 @@ jobs:
             git commit -q -m "PS5 native: contentVersion $RELEASE_TAG" -- sce_sys/param.json
           fi
           git tag -a "$RELEASE_TAG" -m "Dungeon Crawl Stone Soup for PS5 $RELEASE_TAG"
-          # Atomic: if ps5-port moved during the build, neither the bump nor
+          # Atomic: if ps5 moved during the build, neither the bump nor
           # the tag lands, and nothing is released.
-          git push --atomic origin "HEAD:refs/heads/ps5-port" "refs/tags/$RELEASE_TAG"
+          git push --atomic origin "HEAD:refs/heads/ps5" "refs/tags/$RELEASE_TAG"
 
       - name: Publish release
         # A pre-release with the title zip as its only asset, as the catalog

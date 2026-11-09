@@ -1044,6 +1044,13 @@ int _pad_button_key(Uint8 button)
     case SDL_CONTROLLER_BUTTON_B:
         return CK_ESCAPE;
     case SDL_CONTROLLER_BUTTON_X:
+#ifdef USE_PS5_NATIVE
+        // In a menu or popup, Square opens the on-screen keyboard for its
+        // text field (the name and seed entries); screens without one
+        // ignore the key.
+        if (mode == pad_mode::menu)
+            return CK_PS5_TYPE;
+#endif
         return cmd ? 'z' : 0;
     case SDL_CONTROLLER_BUTTON_Y:
         return cmd ? 'i' : 0;

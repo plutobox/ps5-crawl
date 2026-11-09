@@ -1645,6 +1645,22 @@ int msgwin_get_line(string prompt, char *buf, int len,
 {
     bool use_popup = !crawl_state.need_save || ui::has_layout();
 
+#ifdef USE_PS5_NATIVE
+    // There's no keyboard: type on the system's on-screen keyboard.
+    switch (ps5_text_input(prompt, fill, buf, len))
+    {
+    case 1:
+        if (mh)
+            mh->new_input(buf);
+        return 0;
+    case 0:
+        buf[0] = '\0';
+        return CK_ESCAPE;
+    default:
+        break; // it can't open: read keys as before
+    }
+#endif
+
     int ret;
     if (use_popup)
     {

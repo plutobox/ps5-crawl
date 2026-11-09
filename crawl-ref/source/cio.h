@@ -75,6 +75,14 @@ int cancellable_get_line(char *buf,
                          const string &fill = "",
                          const string &tag = "");
 
+#ifdef USE_PS5_NATIVE
+// Ask for a line on the PS5's on-screen keyboard (ps5/ime.c), prompt as its
+// title and fill as the starting text. 1: the text is in buf; 0: cancelled;
+// -1: the keyboard can't open, so read keys instead.
+int ps5_text_input(const string &prompt, const string &fill, char *buf,
+                   int len);
+#endif
+
 // Do not use this templated function directly. Use the macro below instead.
 template<int> static int cancellable_get_line_autohist_temp(char *buf, int len)
 {
@@ -315,6 +323,10 @@ enum KEYS
 
     CK_NO_KEY, // so that the handle_mouse loop can be broken from early (for
               // popups), and otherwise for keys to ignore
+
+#ifdef USE_PS5_NATIVE
+    CK_PS5_TYPE, // the controller asks for the on-screen keyboard
+#endif
 
     // SDL only, both fairly arbitrary
     // ugh

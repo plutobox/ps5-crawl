@@ -64,10 +64,11 @@ done
 sdk="$out/.deps/native/ps5-payload-sdk"
 mkdir -p "$out/src" "$out/vendor" "$out/build/native-imports"
 # cts_runtime_shims.c provides the locale functions libc++ needs, which the
-# title runtime lacks; native_shims.c adds the two it does not cover.
+# title runtime lacks; native_shims.c adds the two it does not cover. ime.c
+# opens the system's on-screen keyboard for Crawl's text prompts.
 cp "$opengl_repo/native-app/runtime_shims.c" "$opengl_repo/native-app/app_heap.c" \
    "$opengl_repo/native-app/cts_runtime_shims.c" "$source_dir/ps5/native_shims.c" \
-   "$out/src/"
+   "$source_dir/ps5/ime.c" "$out/src/"
 cp "$out/tooling/native/ps5-pie.ld" "$out/tooling/native/ps5-pie-base.ld"
 cp "$opengl_repo/native-app/ps5-pie.ld" "$opengl_repo/native-app/app-symbols.map" \
    "$out/tooling/native/"

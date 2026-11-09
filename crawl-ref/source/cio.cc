@@ -349,6 +349,29 @@ void wrapcprintf(const char *s, ...)
     wrapcprint_skipping(0, cgetsize(get_cursor_region()).x, buf);
 }
 
+#ifdef USE_PS5_NATIVE
+extern "C" int crawl_ps5_text_input(const char *prompt, const char *fill,
+                                    char *answer, int size, int width,
+                                    int height, void (*redraw)(void));
+
+static void _ps5_redraw()
+{
+    ui::force_render();
+}
+
+int ps5_text_input(const string &prompt, const string &fill, char *buf,
+                   int len)
+{
+    // The keyboard's title is plain text: no colour tags or line breaks.
+    string title = formatted_string::parse_string(prompt).tostring();
+    title = replace_all(trim_string(title), "\n", " ");
+    return crawl_ps5_text_input(title.c_str(), fill.c_str(), buf, len,
+                                wm ? wm->screen_width() : 1920,
+                                wm ? wm->screen_height() : 1080,
+                                _ps5_redraw);
+}
+#endif
+
 int cancellable_get_line(char *buf, int len, input_history *mh,
                         keyfun_action (*keyproc)(int &ch), const string &fill,
                         const string &tag)
@@ -356,6 +379,26 @@ int cancellable_get_line(char *buf, int len, input_history *mh,
     UNUSED(tag);
 
     flush_prev_message();
+
+#ifdef USE_PS5_NATIVE
+    // There's no keyboard: type on the system's on-screen keyboard, titled
+    // with the question the caller has just printed. Not where keyproc ends
+    // the line on a key and acts on it (a repeat count and its command).
+    if (!keyproc)
+    {
+        switch (ps5_text_input(get_last_messages(1, true), fill, buf, len))
+        {
+        case 1:
+            if (mh)
+                mh->new_input(buf);
+            return 0;
+        case 0:
+            return CK_ESCAPE;
+        default:
+            break; // it can't open: read keys as before
+        }
+    }
+#endif
 
     mouse_control mc(MOUSE_MODE_PROMPT);
     line_reader reader(buf, len, get_number_of_cols());

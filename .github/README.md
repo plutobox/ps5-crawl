@@ -30,7 +30,7 @@ waiting for.
 | D-pad / left stick | Move in 8 directions (hold to repeat) | Move the cursor | Move the cursor |
 | ✕ Cross | Take the stairs, or pick up what's here | Confirm (Enter) | Confirm |
 | ○ Circle | Cancel (Esc) | Cancel | Cancel |
-| □ Square | Cast a spell (`z`) | | |
+| □ Square | Cast a spell (`z`) | Type in the text field (name, seed) | |
 | △ Triangle | Inventory (`i`) | | |
 | L1 | Wait a turn (`s`) | Previous page | |
 | R1 | Fire (`f`) | Next page | Fire at the target |
@@ -42,16 +42,20 @@ waiting for.
 | Options | Game menu (`~`): save, quit, help, settings | Cancel | Cancel |
 | Touchpad | Level map (`X`) | | |
 
-When you start a new game, leave the name empty and confirm: Crawl picks a
-random name for you.
+**Typing text** uses the PS5's own on-screen keyboard:
+- Questions that ask you to type, such as inscribing an item, searching
+  or adding a note, open it by themselves, titled with the question.
+- On the main menu and the new-game screens, press □ Square to type your
+  name or a seed into the field.
+- Close the keyboard with ○ Circle to cancel the question.
+
+When you start a new game, you can also leave the name empty and confirm:
+Crawl picks a random name for you.
 
 ## What's missing
 
-- **Typing text.** There's no keyboard: ps5-opengl's SDL has no keyboard or
-  system keyboard support, and the port has no on-screen keyboard yet.
-  Anything that asks you to type (inscribing items, searching with
-  Ctrl-F, notes, macros, naming your character) can only be confirmed
-  empty or cancelled.
+- **Typing a repeat count.** The prompt that reads a number and then a
+  command still expects keys, so it can only be cancelled.
 - **Commands without a button.** Only the commands in the table have a
   button. The rest (such as quaff, read, wear and evoke) are reached through
   the inventory, so item actions work but there's no shortcut for each.

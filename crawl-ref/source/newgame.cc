@@ -33,6 +33,7 @@
 #include "state.h"
 #include "stringutil.h"
 #include "tilepick.h"
+#include "unicode.h"
 #ifdef USE_TILE
 #include "tilereg-crt.h"
 #include "tilepick-p.h"
@@ -684,6 +685,31 @@ static void _choose_name(newgame_def& ng, newgame_def& choice)
         if (ui::key_exits_popup(key, false))
             return done = cancel = true;
 
+#ifdef USE_PS5_NATIVE
+        if (key == CK_PS5_TYPE && !overwrite_prompt)
+        {
+            char text[sizeof buf];
+            if (ps5_text_input("What is your name today?", buf, text,
+                               sizeof text) == 1)
+            {
+                // Replace the name, as typing it would.
+                reader.putkey(CK_END);
+                reader.putkey(CONTROL('U'));
+                char32_t c;
+                for (const char *s = text; *s; )
+                {
+                    const int bytes = utf8towc(&c, s);
+                    if (bytes <= 0)
+                        break;
+                    reader.putkey(c);
+                    s += bytes;
+                }
+                good_name = is_good_name(buf, true);
+                ok_switcher->current() = good_name ? 0 : 1;
+            }
+            return true;
+        }
+#endif
         if (!overwrite_prompt)
         {
             key = reader.putkey(key);

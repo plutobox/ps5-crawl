@@ -51,6 +51,7 @@
 #include "state.h"
 #include "status.h"
 #include "stringutil.h"
+#include "unicode.h"
 #include "terrain.h"
  #include "tilepick.h"
 #ifdef USE_TILE
@@ -867,6 +868,36 @@ void UIStartupMenu::on_show()
             input_string = "";
             changed_name = true;
         }
+#ifdef USE_PS5_NATIVE
+        else if (keyn == CK_PS5_TYPE)
+        {
+            // The name on the system's on-screen keyboard, keeping only the
+            // characters typing it here would accept.
+            char text[256];
+            if (ps5_text_input("What is your name?", input_string, text,
+                               sizeof text) == 1)
+            {
+                string name;
+                char32_t c;
+                for (const char *s = text; *s; )
+                {
+                    const int bytes = utf8towc(&c, s);
+                    if (bytes <= 0)
+                        break;
+                    s += bytes;
+                    if ((iswalnum(c) || c == '-' || c == '.' || c == '_'
+                         || c == ' ')
+                        && strwidth(name) < MAX_NAME_LENGTH)
+                    {
+                        name += stringize_glyph(c);
+                    }
+                }
+                input_string = name;
+                first_action = false;
+                changed_name = true;
+            }
+        }
+#endif
 
         if (keyn == ' ' && first_action)
         {

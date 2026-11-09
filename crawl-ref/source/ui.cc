@@ -2029,6 +2029,18 @@ bool TextEntry::on_event(const Event& event)
             if (key == CK_MOUSE_CMD)
                 return false;
 #endif
+#ifdef USE_PS5_NATIVE
+            if (key == CK_PS5_TYPE)
+            {
+                char text[sizeof m_buffer];
+                if (ps5_text_input("", m_text, text, sizeof text) == 1)
+                {
+                    set_text(text);
+                    _expose();
+                }
+                return true;
+            }
+#endif
             int ret = m_line_reader.process_key_core(key);
             if (ret == CK_ESCAPE || ret == 0)
                 ui::set_focused_widget(nullptr);

@@ -208,13 +208,12 @@ export uname_S
 #
 ifdef PS5
 	# Tiles with the core profile renderer, linked against the SDL2, Mesa
-	# and other libraries that ship with the ps5-payload-sdk. LuaJIT and
+	# and other libraries that ship with the ps5-payload-sdk. Lua 5.4 and
 	# SQLite come from the ps5-payload pacbrew packages, not contrib.
 	PS5_PAYLOAD_SDK ?= /opt/ps5-payload-sdk
 	CROSSHOST := x86_64-ps5
 	TILES := y
 	GL_CORE := y
-	USE_LUAJIT := y
 	COPY_FONTS := y
 	# SDL2_image is a static library that needs libwebp.
 	EXTRA_LIBS += -lwebpdemux -lwebp -lsharpyuv
@@ -728,6 +727,11 @@ ifndef BUILD_LUA
     BUILD_LUA = yes
   endif
 endif
+ifdef PS5
+  # The ps5-payload-lua package (Lua 5.4) installs liblua.a and the Lua
+  # headers into the SDK sysroot but no pkg-config file.
+  LIBS += -llua
+else
 # You can override the Lua package search with "make LUA_PACKAGE=lua-5.4".
 # pkg-config is still required.
 ifndef LUA_PACKAGE
@@ -769,6 +773,7 @@ ifndef BUILD_LUA
   CFLAGS_L  += $(shell $(PKGCONFIG) $(LUA_PACKAGE) --cflags-only-other)
   LIBS += $(shell $(PKGCONFIG) $(LUA_PACKAGE) --libs)
 endif
+endif # PS5
 
 ifdef USE_LUAJIT
 DEFINES_L += -DUSE_LUAJIT

@@ -4960,6 +4960,9 @@ static string _find_executable_path()
         return utf16_to_8(tempPath);
     else
         return "";
+#elif defined (USE_PS5_NATIVE)
+    // A native PS5 title is always /app0/eboot.bin; it has no /proc.
+    return "/app0/eboot.bin";
 #elif defined (UNIX)
     char tempPath[2048];
     const ssize_t rsize =

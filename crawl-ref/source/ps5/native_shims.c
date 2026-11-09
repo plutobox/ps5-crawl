@@ -19,17 +19,15 @@ const _RuneLocale *__getCurrentRuneLocale(void)
     return __runes_for_locale(NULL, NULL);
 }
 
-/* PacBrew's SQLite calls localtime_r, which the title's C library declares
-   but does not provide. localtime() is there; SQLite only calls this from
-   the game thread, so its shared buffer is safe to copy from. */
+/* lstat() fails for a title, and PacBrew's SQLite calls it on every path it
+   opens; mihawk-99's platform layer has no replacement. A title has no
+   symbolic links, so stat() answers the same. package-native.sh binds lstat
+   to this (--defsym), as it binds the platform layer's ps5_ functions: a
+   title must not define libc's own names. */
 
-#include <time.h>
+#include <sys/stat.h>
 
-struct tm *localtime_r(const time_t *timer, struct tm *result)
+int crawl_ps5_lstat(const char *restrict path, struct stat *restrict sb)
 {
-    const struct tm *local = localtime(timer);
-    if (!local)
-        return NULL;
-    *result = *local;
-    return result;
+    return stat(path, sb);
 }

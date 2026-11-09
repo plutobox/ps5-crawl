@@ -20,6 +20,9 @@
 #   PS5_SDL2_PREFIX      SDL2 built by ps5-opengl's integration/SDL2/build.py
 #   PS5_PACBREW_PREFIX   the boilerplate's PacBrew ports (user/homebrew), from
 #                        tools/setup-pacbrew-dependencies.sh --all
+#   PS5_PLATFORM_LIB     libps5platform.a from mihawk-99/PS5_PayloadSDK's
+#                        platform layer (make -C platform), for the C library
+#                        functions a title lacks or is refused
 #   TITLE_ID, TITLE_NAME, CONTENT_VERSION
 set -euo pipefail
 
@@ -29,6 +32,7 @@ opengl_repo=${PS5_OPENGL_REPO:-$HOME/ps5-opengl}
 opengl=${PS5_OPENGL_PREFIX:-$HOME/ps5-opengl-sdk/ps5-opengl-sdk-1.0.2/sdk}
 sdl2=${PS5_SDL2_PREFIX:-$HOME/ps5-opengl/build/sdl-native/sdk}
 pacbrew=${PS5_PACBREW_PREFIX:-$template/.deps/pacbrew/v0.40.2/sysroot/user/homebrew}
+platform=${PS5_PLATFORM_LIB:-$HOME/ps5-platform-sdk/platform/build/ps5/libps5platform.a}
 title_id=${TITLE_ID:-PPSA92041}
 title_name=${TITLE_NAME:-Dungeon Crawl Stone Soup}
 content_version=${CONTENT_VERSION:-01.000.000}
@@ -42,7 +46,7 @@ die() { echo "package-native: $*" >&2; exit 1; }
 for path in "$template/tools/build.sh" "$template/.deps/native/ps5-payload-sdk" \
             "$opengl_repo/native-app/runtime_shims.c" \
             "$opengl/lib/libPS5OpenGLCore33.a" "$sdl2/lib/libSDL2.a" "$pacbrew/lib" \
-            "$source_dir/crawl-native.objs"; do
+            "$platform" "$source_dir/crawl-native.objs"; do
     [[ -e $path ]] || die "missing $path"
 done
 
@@ -88,14 +92,22 @@ replace_once "$out/tooling/native/sce_module_writer.cpp" \
 replace_once "$out/tools/build.sh" \
     'bash "$root/tools/setup-native-dependencies.sh" >/dev/null' \
     'test -x "$root/.deps/native/ps5-payload-sdk/bin/prospero-lld"'
+# The C library functions a title lacks (no system module it loads exports
+# them), is refused (the sandbox fails them, or a raw system call raises
+# SIGSYS) or gets wrong, bound to the platform layer's ps5_ versions. A title
+# must not define libc's own names, so they are bound at link time.
+platform_functions=(access closedir fchown fork getcwd isatty localeconv
+                    localtime_r mkstemp opendir readdir readlink regcomp
+                    regerror regexec regfree strcasestr sysconf)
+defsyms=()
+for function in "${platform_functions[@]}"; do
+    defsyms+=("--defsym=$function=ps5_$function")
+done
+# lstat fails for a title too, and the platform layer has none.
+defsyms+=("--defsym=lstat=crawl_ps5_lstat")
 replace_once "$out/tools/build.sh" \
     '--eh-frame-hdr \' \
-    '--eh-frame-hdr --wrap=malloc --wrap=calloc --wrap=realloc --wrap=free --wrap=posix_memalign --wrap=malloc_usable_size --wrap=fopen \'
-
-# contrib/pcre archives only the objects newer than the old archive ($?), so
-# with clock skew (e.g. WSL) its libpcre.a can miss most of the library.
-# Archive all of its objects here instead.
-llvm-ar-18 rcs "$out/vendor/libpcre.a" "$source_dir"/contrib/pcre/pcre_*.o
+    "--eh-frame-hdr --wrap=malloc --wrap=calloc --wrap=realloc --wrap=free --wrap=posix_memalign --wrap=malloc_usable_size --wrap=fopen ${defsyms[*]} \\"
 
 # The link: every game object, then the libraries in one group.
 compiler_rt="$(clang-18 --print-resource-dir)/lib/linux/libclang_rt.builtins-x86_64.a"
@@ -105,7 +117,7 @@ libraries=("$pacbrew/lib/libSDL2_image.a" "$pacbrew/lib/libwebpdemux.a"
            "$pacbrew/lib/libwebp.a" "$pacbrew/lib/libsharpyuv.a"
            "$pacbrew/lib/libfreetype.a" "$pacbrew/lib/libbz2.a"
            "$pacbrew/lib/libpng16.a" "$pacbrew/lib/libz.a"
-           "$pacbrew/lib/liblua.a" "$pacbrew/lib/libsqlite3.a" "$out/vendor/libpcre.a"
+           "$pacbrew/lib/liblua.a" "$pacbrew/lib/libsqlite3.a" "$platform"
            "$sdl2/lib/libSDL2.a" "$opengl/lib/libPS5OpenGLCore33.a"
            "$sdk/target/lib/libunwind.a" "$sdk/target/lib/libc++abi.a"
            "$sdk/target/lib/libc++.a" "$compiler_rt")

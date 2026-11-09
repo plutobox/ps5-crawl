@@ -239,8 +239,8 @@ ifdef PS5_NATIVE
 	CROSSHOST := x86_64-sie-ps5
 	TILES := y
 	GL_CORE := y
-	# The title's C library has no POSIX regex, and PacBrew has no PCRE.
-	BUILD_PCRE := y
+	# POSIX regex, which the title's C library lacks: package-native.sh binds
+	# regcomp and its family to mihawk-99's platform layer (musl's TRE).
 	COPY_FONTS := y
 	prefix ?= /app0
 	DATADIR ?= assets
@@ -611,9 +611,6 @@ STRIP := true
 CFOTHERS += -D__PROSPERO__ -DUSE_PS5_NATIVE -fPIC -ffunction-sections -fdata-sections
 # The PS5 target defaults to neither; the SDK has libunwind and libc++abi.
 CFOTHERS += -fexceptions -fcxx-exceptions -frtti
-# PCRE's BSD _setjmp/_longjmp: the title's C library only has
-# setjmp/longjmp.
-CFOTHERS += -D_setjmp=setjmp -D_longjmp=longjmp
 # ps5-opengl's SDL2 headers come first: PacBrew's include/SDL2 also holds
 # its own SDL2's headers, and only SDL_image.h is wanted from it.
 INCLUDES_L += -isystem $(PS5_SDL2_PREFIX)/include/SDL2 \

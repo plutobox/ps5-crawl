@@ -203,7 +203,10 @@ void init_crash_handler()
 {
     mutex_init(crash_mutex);
 
-#if defined(USE_UNIX_SIGNALS)
+#if defined(USE_UNIX_SIGNALS) && !defined(USE_PS5_NATIVE)
+    // A native PS5 title leaves crashes to the system: Crawl's handler cannot
+    // get a stack trace there and hangs the title after its dump, while the
+    // system's report has the faulting address and a backtrace.
     for (int i = 1; i <= 64; i++)
     {
 #ifdef SIGALRM

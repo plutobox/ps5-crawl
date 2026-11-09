@@ -119,6 +119,12 @@ jobs:
           makepkg -c -f
           sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
 
+      - name: Build PS5 bzip2 package
+        working-directory: pacbrew-repo/bzip2
+        run: |
+          makepkg -c -f
+          sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
+
       - name: Build PS5 freetype package
         working-directory: pacbrew-repo/freetype
         run: |
@@ -150,6 +156,7 @@ jobs:
         run: |
           make -j"$(nproc)" PS5=y install DESTDIR="$RUNNER_TEMP/stage"
           echo "CRAWL_VERSION=$(git describe)" >> "$GITHUB_ENV"
+          ls -a $DESTDIR
 
       # - name: Package
       #   run: |

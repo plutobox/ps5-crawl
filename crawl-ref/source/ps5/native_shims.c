@@ -18,3 +18,18 @@ const _RuneLocale *__getCurrentRuneLocale(void)
 {
     return __runes_for_locale(NULL, NULL);
 }
+
+/* PacBrew's SQLite calls localtime_r, which the title's C library declares
+   but does not provide. localtime() is there; SQLite only calls this from
+   the game thread, so its shared buffer is safe to copy from. */
+
+#include <time.h>
+
+struct tm *localtime_r(const time_t *timer, struct tm *result)
+{
+    const struct tm *local = localtime(timer);
+    if (!local)
+        return NULL;
+    *result = *local;
+    return result;
+}

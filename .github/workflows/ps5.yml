@@ -129,23 +129,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git clone -q https://github.com/drakmor/ps5-native-app-boilerplate "$HOME/ps5-native-app-boilerplate"
-          git -C "$HOME/ps5-native-app-boilerplate" checkout -q "$BOILERPLATE_REV"
+          # Fetch each pinned commit by SHA: the boilerplate's is no longer on
+          # a branch (upstream main was rewritten), but GitHub still serves it.
+          fetch_rev() {
+            git init -q "$3"
+            git -C "$3" fetch -q --depth 1 "https://github.com/$1" "$2"
+            git -C "$3" checkout -q FETCH_HEAD
+          }
+          fetch_rev drakmor/ps5-native-app-boilerplate "$BOILERPLATE_REV" "$HOME/ps5-native-app-boilerplate"
           bash "$HOME/ps5-native-app-boilerplate/tools/setup-native-dependencies.sh"
           # The boilerplate's pinned PacBrew release: SDL2_image, freetype,
           # libpng, zlib, Lua and SQLite built for PS5.
           bash "$HOME/ps5-native-app-boilerplate/tools/setup-pacbrew-dependencies.sh" --all
 
-          git clone -q https://github.com/darkxex/ps5-opengl "$HOME/ps5-opengl"
-          git -C "$HOME/ps5-opengl" checkout -q "$PS5_OPENGL_REV"
+          fetch_rev darkxex/ps5-opengl "$PS5_OPENGL_REV" "$HOME/ps5-opengl"
 
           mkdir -p "$HOME/ps5-opengl-sdk"
           gh release download "v$PS5_OPENGL_SDK_VERSION" --repo darkxex/ps5-opengl \
             --pattern "ps5-opengl-sdk-$PS5_OPENGL_SDK_VERSION.tar.gz" --dir "$RUNNER_TEMP"
           tar -xzf "$RUNNER_TEMP/ps5-opengl-sdk-$PS5_OPENGL_SDK_VERSION.tar.gz" -C "$HOME/ps5-opengl-sdk"
 
-          git clone -q https://github.com/ps5-payload-dev/SDL "$RUNNER_TEMP/SDL"
-          git -C "$RUNNER_TEMP/SDL" checkout -q "$SDL_REV"
+          fetch_rev ps5-payload-dev/SDL "$SDL_REV" "$RUNNER_TEMP/SDL"
 
       - name: Build SDL2 for the native title
         working-directory: /home/runner/ps5-opengl

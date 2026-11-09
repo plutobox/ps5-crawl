@@ -131,12 +131,17 @@ jobs:
           makepkg -c -f
           sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
 
+      - name: Build PS5 libsamplerate package
+        working-directory: pacbrew-repo/libsamplerate
+        run: |
+          makepkg -c -f
+          sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
+
       - name: Build PS5 SDL2 package
         working-directory: pacbrew-repo/SDL2
         run: |
           makepkg -c -f
           sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
-
 
       - name: Build PS5 SDL2_image package
         working-directory: pacbrew-repo/SDL2_image
@@ -144,12 +149,17 @@ jobs:
           makepkg -c -f
           sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
 
+      - name: Build PS5 libpng package
+        working-directory: pacbrew-repo/libpng
+        run: |
+          makepkg -c -f
+          sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
 
       - name: Clone a Public Repo
         uses: actions/checkout@v4
         with:
           repository: 'crawl/crawl'
-          path: 'crawl' # Clones into a directory named 'my-sub-folder'
+          path: 'crawl' # Clones into a directory named 'crawl'
 
       - name: Build
         working-directory: crawl/crawl-ref/source

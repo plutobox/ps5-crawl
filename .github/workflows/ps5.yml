@@ -154,7 +154,7 @@ jobs:
       - name: Build
         working-directory: crawl/crawl-ref/source
         run: |
-          make -j"$(nproc)" PS5=y install DESTDIR="$RUNNER_TEMP/stage"
+          make -j4 PS5=y install DESTDIR="$RUNNER_TEMP/stage"
           echo "CRAWL_VERSION=$(git describe)" >> "$GITHUB_ENV"
           ls -a $DESTDIR
 

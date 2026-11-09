@@ -16,6 +16,9 @@
 #include <sstream>
 #include <string>
 #include <utility> // pair
+#ifdef USE_PS5_NATIVE
+# include <unistd.h> // dup2
+#endif
 #include <vector>
 #include <fcntl.h>
 #if defined(UNIX) || defined(TARGET_COMPILER_MINGW)
@@ -239,6 +242,16 @@ __attribute__((externally_visible))
 #endif
 int main(int argc, char *argv[])
 {
+#ifdef USE_PS5_NATIVE
+    // A native PS5 title has no console: keep Crawl's output in a file that
+    // can be read back over FTP. Unbuffered, so a crash loses nothing.
+    if (freopen("/data/crawl-ps5.log", "w", stdout))
+    {
+        setvbuf(stdout, nullptr, _IONBF, 0);
+        dup2(fileno(stdout), fileno(stderr));
+    }
+    printf("%s starting\n", CRAWL);
+#endif
 #ifdef DGAMELAUNCH
     // avoid commas instead of dots, etc, on CDO
     setlocale(LC_CTYPE, "");

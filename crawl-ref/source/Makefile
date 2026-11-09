@@ -208,20 +208,45 @@ export uname_S
 #
 ifdef PS5
 	# Tiles with the core profile renderer, linked against the SDL2, Mesa
-	# and other libraries that ship with the ps5-payload-sdk. Lua and SQLite
-	# come from contrib, as the SDK has no pkg-config entry for SQLite.
+	# and other libraries that ship with the ps5-payload-sdk. LuaJIT and
+	# SQLite come from the ps5-payload pacbrew packages, not contrib.
 	PS5_PAYLOAD_SDK ?= /opt/ps5-payload-sdk
 	CROSSHOST := x86_64-ps5
 	TILES := y
 	GL_CORE := y
-	BUILD_LUA := y
-	BUILD_SQLITE := y
+	USE_LUAJIT := y
 	COPY_FONTS := y
 	# SDL2_image is a static library that needs libwebp.
 	EXTRA_LIBS += -lwebpdemux -lwebp -lsharpyuv
 	prefix ?= /data/crawl
 	DATADIR ?= data
 	SAVEDIR ?= saves
+endif
+
+ifdef PS5_NATIVE
+	# A native PS5 title (eboot.bin) built with ps5-native-app-boilerplate's
+	# compiler and linked against ps5-opengl's statically linked OpenGL and
+	# SDL2. This builds crawl-native.a (the game and its contrib libraries);
+	# ps5/package-native.sh links it into the title. Game data is packaged
+	# in the title's assets/ (mounted at /app0/assets); saves need a
+	# writable location.
+	PS5_NATIVE_TEMPLATE ?= $(HOME)/ps5-native-app-boilerplate
+	PS5_NATIVE_SDK ?= $(PS5_NATIVE_TEMPLATE)/.deps/native/ps5-payload-sdk
+	PS5_SDL2_PREFIX ?= $(HOME)/ps5-opengl/build/sdl-native/sdk
+	CROSSHOST := x86_64-sie-ps5
+	TILES := y
+	GL_CORE := y
+	BUILD_LUA := y
+	BUILD_SQLITE := y
+	BUILD_ZLIB := y
+	BUILD_LIBPNG := y
+	BUILD_FREETYPE := y
+	# The title's C library has no POSIX regex.
+	BUILD_PCRE := y
+	COPY_FONTS := y
+	prefix ?= /app0
+	DATADIR ?= assets
+	SAVEDIR ?= /download0/crawl/
 endif
 
 uname_S := $(shell sh -c 'uname -s 2>/dev/null || echo not')
@@ -235,6 +260,9 @@ ifdef CROSSHOST
 	ARCH := $(CROSSHOST)
 	ifdef PS5
 	  PKGCONFIG = $(PS5_PAYLOAD_SDK)/bin/prospero-pkg-config
+	else ifdef PS5_NATIVE
+	  # Include paths are set explicitly below.
+	  NO_PKGCONFIG = YesPlease
 	else ifneq (,$(shell which $(ARCH)-pkg-config 2>/dev/null))
 	  PKGCONFIG = $(ARCH)-pkg-config
 	else
@@ -576,6 +604,22 @@ RANLIB := $(PS5_PAYLOAD_SDK)/bin/prospero-ranlib
 STRIP := $(PS5_PAYLOAD_SDK)/bin/prospero-strip
 endif
 
+ifdef PS5_NATIVE
+GCC := env PS5_PAYLOAD_SDK=$(PS5_NATIVE_SDK) sh $(PS5_NATIVE_TEMPLATE)/tooling/prospero-clang18
+GXX := $(GCC)
+AR := llvm-ar-18
+RANLIB := llvm-ranlib-18
+STRIP := true
+CFOTHERS += -D__PROSPERO__ -DUSE_PS5_NATIVE -fPIC -ffunction-sections -fdata-sections
+# The PS5 target defaults to neither; the SDK has libunwind and libc++abi.
+CFOTHERS += -fexceptions -fcxx-exceptions -frtti
+# Lua and libpng use the BSD _setjmp/_longjmp, which the title's C library
+# only has as setjmp/longjmp.
+CFOTHERS += -D_setjmp=setjmp -D_longjmp=longjmp
+INCLUDES_L += -isystem $(PS5_SDL2_PREFIX)/include/SDL2 \
+              -isystem $(PS5_SDL2_PREFIX)/include -isystem contrib/sdl2-image
+endif
+
 endif
 
 ifdef USE_ICC
@@ -736,7 +780,11 @@ ifndef BUILD_SQLITE
   endif
 endif
 ifndef BUILD_SQLITE
- ifneq ($(shell $(PKGCONFIG) sqlite3 --exists || echo no),)
+ ifdef PS5
+   # The ps5-payload-sqlite package installs libsqlite3.a and sqlite3.h
+   # into the SDK sysroot but no pkg-config file.
+   LIBS += -lsqlite3
+ else ifneq ($(shell $(PKGCONFIG) sqlite3 --exists || echo no),)
    BUILD_SQLITE = yes
  else
    INCLUDES_L += $(shell $(PKGCONFIG) sqlite3 --cflags-only-I | sed -e 's/-I/-isystem /')
@@ -1740,6 +1788,17 @@ distclean: clean clean-contrib clean-rltiles
 
 $(GAME): $(GAME_OBJS) $(CONTRIB_LIBS) dat/dlua/tags.lua
 	+$(QUIET_LINK)$(CXX) $(LDFLAGS) $(GAME_OBJS) -o $(GAME) $(LIBS)
+
+# PS5 native title: the game's objects, linked into eboot.bin by
+# ps5/package-native.sh together with the contrib libraries.
+crawl-native.a: $(GAME_OBJS) $(CONTRIB_LIBS) dat/dlua/tags.lua
+	$(RM) $@
+	$(AR) rcs $@ $(GAME_OBJS)
+
+# Every object is linked, not just the ones main() pulls in from the archive,
+# so the list is passed to the linker as well.
+crawl-native.objs: crawl-native.a
+	@printf '%s\n' $(abspath $(GAME_OBJS)) > $@
 
 util/monster/vault_monster_data.h: dat/des util/gather_mons
 	util/gather_mons -v > $@

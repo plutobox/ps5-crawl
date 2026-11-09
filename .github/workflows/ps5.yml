@@ -167,18 +167,16 @@ jobs:
           makepkg -c -f
           sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
 
-      - name: Clone a Public Repo
-        uses: actions/checkout@v4
-        with:
-          repository: 'crawl/crawl'
-          path: 'crawl' # Clones into a directory named 'crawl'
+      - name: Checkout fonts submodule
+        # Only the fonts; every library comes from the pacbrew packages.
+        run: git submodule update --init --depth 1 crawl-ref/source/contrib/fonts
 
       - name: Build
-        working-directory: crawl/crawl-ref/source
+        working-directory: crawl-ref/source
         run: |
           make -j4 PS5=y install DESTDIR="$RUNNER_TEMP/stage"
           echo "CRAWL_VERSION=$(git describe)" >> "$GITHUB_ENV"
-          ls -a $DESTDIR
+          ls -a "$RUNNER_TEMP/stage"
 
       # - name: Package
       #   run: |

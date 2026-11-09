@@ -514,8 +514,11 @@ int SDLWrapper::init(coord_def *m_windowsz)
                         SDL_GL_CONTEXT_PROFILE_CORE);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+# ifdef __APPLE__
+    // macOS only provides core profiles as forward-compatible contexts.
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS,
                         SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+# endif
 #endif
 
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
@@ -578,6 +581,14 @@ int SDLWrapper::init(coord_def *m_windowsz)
         set_window_placement(m_windowsz);
 #endif
     }
+
+#ifdef USE_PS5_NATIVE
+    // ps5-opengl's SDL video driver supports exactly one fixed OpenGL window
+    // the size of the video output.
+    flags = SDL_WINDOW_OPENGL;
+    m_windowsz->x = _desktop_width;
+    m_windowsz->y = _desktop_height;
+#endif
 
     string title = string(CRAWL " ") + Version::Long;
     m_window = SDL_CreateWindow(title.c_str(),

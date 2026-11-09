@@ -1,0 +1,220 @@
+name: PS5 Build and Release
+
+on:
+  push:
+    paths-ignore:
+      - "**/*.md"
+  pull_request:
+    paths-ignore:
+      - "**/*.md"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+jobs:
+  # The ELF payload (PS5=y), for loaders such as elfldr. Not a catalog
+  # artifact: the homebrew catalog lists native titles only.
+  payload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup build environment
+        # clang/lld run the prospero-clang wrappers; libpng-dev is for
+        # tilegen, which runs on the runner to generate the tile images.
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            build-essential \
+            clang-18 \
+            git \
+            libpng-dev \
+            lld-18 \
+            perl \
+            pkg-config \
+            python3 \
+            python3-yaml \
+            zip
+
+      - name: Install prebuilt PS5 payload SDK
+        # The pacbrew-repo release bundles the SDK with every pacbrew
+        # library (SDL2, SDL2_image, Lua, SQLite, freetype, libpng, ...)
+        # already built and installed under /opt/ps5-payload-sdk.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACBREW_VERSION: v0.41.1
+        run: |
+          gh release download "$PACBREW_VERSION" \
+            --repo ps5-payload-dev/pacbrew-repo \
+            --pattern ps5-payload-dev.tar.gz --dir "$RUNNER_TEMP"
+          sudo tar -xzf "$RUNNER_TEMP/ps5-payload-dev.tar.gz" -C /
+          rm "$RUNNER_TEMP/ps5-payload-dev.tar.gz"
+
+      - name: Checkout fonts submodule
+        # Only the fonts; every library comes from the pacbrew packages.
+        run: git submodule update --init --depth 1 crawl-ref/source/contrib/fonts
+
+      - name: Build
+        working-directory: crawl-ref/source
+        run: |
+          make -j4 PS5=y install DESTDIR="$RUNNER_TEMP/stage"
+          echo "CRAWL_VERSION=$(git describe)" >> "$GITHUB_ENV"
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp "$RUNNER_TEMP/stage/data/crawl/bin/crawl" dist/crawl-ps5.elf
+          (cd "$RUNNER_TEMP/stage" && zip -qr "$GITHUB_WORKSPACE/dist/crawl-ps5-payload.zip" .)
+          (cd dist && sha256sum crawl-ps5.elf crawl-ps5-payload.zip | tee SHA256SUMS)
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: crawl-ps5-payload-${{ env.CRAWL_VERSION }}
+          path: dist/
+
+  # The native title (PS5_NATIVE=y): <TITLEID>.zip with eboot.bin, sce_sys/
+  # and assets/, the file the homebrew catalog installs. Built with the same
+  # pinned toolchain as ps5/package-native.sh expects in $HOME.
+  native:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # to publish the release on a version tag
+    env:
+      BOILERPLATE_REV: 4f531c4b517f80bcb6b1267135848168d2250047
+      PS5_OPENGL_REV: 6b6bb2039f741287ed7f1bc6bc4b2c589709a0ba
+      PS5_OPENGL_SDK_VERSION: 1.0.2
+      SDL_REV: 8c56053f13ca13a0c050de613706ff69eb615836
+      # mihawk-99's fork of the payload SDK: its platform layer supplies the
+      # C library functions a title lacks or is refused, and POSIX regex.
+      PS5_PLATFORM_REV: e105cf6f25801d9e9981812a89a3b74021d2d2a2
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout fonts submodule
+        # Every library is a PS5 build: PacBrew's, ps5-opengl's SDL2 and the
+        # platform layer. Only the fonts come from contrib.
+        run: git submodule update --init --depth 1 crawl-ref/source/contrib/fonts
+
+      - name: Setup build environment
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            build-essential ccache clang-18 cmake curl git libclang-rt-18-dev \
+            libpng-dev lld-18 llvm-18 ninja-build perl pkg-config python3 \
+            python3-yaml tar unzip wget zip
+
+      - name: Read title metadata
+        # sce_sys/param.json is the committed copy the catalog reads; the
+        # build uses the same title ID and content version.
+        run: |
+          python3 - >> "$GITHUB_ENV" <<'PY'
+          import json
+          param = json.load(open("sce_sys/param.json"))
+          print(f"TITLE_ID={param['titleId']}")
+          print(f"CONTENT_VERSION={param['contentVersion']}")
+          PY
+
+      - name: Fetch native toolchain
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Fetch each pinned commit by SHA: the boilerplate's is no longer on
+          # a branch (upstream main was rewritten), but GitHub still serves it.
+          fetch_rev() {
+            git init -q "$3"
+            git -C "$3" fetch -q --depth 1 "https://github.com/$1" "$2"
+            git -C "$3" checkout -q FETCH_HEAD
+          }
+          # The boilerplate's setup scripts download quietly (wget -q); retry
+          # them, as a dropped download fails with no message.
+          retry() {
+            for attempt in 1 2 3; do
+              "$@" && return 0
+              echo "::warning::attempt $attempt failed: $*"
+              sleep 10
+            done
+            return 1
+          }
+          fetch_rev drakmor/ps5-native-app-boilerplate "$BOILERPLATE_REV" "$HOME/ps5-native-app-boilerplate"
+          # The compiler wrapper is committed without its executable bit, and
+          # the SDL2 build runs it directly.
+          chmod +x "$HOME/ps5-native-app-boilerplate/tooling/prospero-clang18"
+          retry bash "$HOME/ps5-native-app-boilerplate/tools/setup-native-dependencies.sh"
+          # The boilerplate's pinned PacBrew release: SDL2_image, freetype,
+          # libpng, zlib, Lua and SQLite built for PS5.
+          retry bash "$HOME/ps5-native-app-boilerplate/tools/setup-pacbrew-dependencies.sh" --all
+
+          fetch_rev mihawk-99/PS5_PayloadSDK "$PS5_PLATFORM_REV" "$HOME/ps5-platform-sdk"
+
+          fetch_rev darkxex/ps5-opengl "$PS5_OPENGL_REV" "$HOME/ps5-opengl"
+
+          mkdir -p "$HOME/ps5-opengl-sdk"
+          gh release download "v$PS5_OPENGL_SDK_VERSION" --repo darkxex/ps5-opengl \
+            --pattern "ps5-opengl-sdk-$PS5_OPENGL_SDK_VERSION.tar.gz" --dir "$RUNNER_TEMP"
+          tar -xzf "$RUNNER_TEMP/ps5-opengl-sdk-$PS5_OPENGL_SDK_VERSION.tar.gz" -C "$HOME/ps5-opengl-sdk"
+
+          fetch_rev ps5-payload-dev/SDL "$SDL_REV" "$RUNNER_TEMP/SDL"
+
+      - name: Build SDL2 for the native title
+        working-directory: /home/runner/ps5-opengl
+        run: |
+          python3 integration/SDL2/build.py native \
+            --sdl-source "$RUNNER_TEMP/SDL" \
+            --sdk-prefix "$HOME/ps5-opengl-sdk/ps5-opengl-sdk-$PS5_OPENGL_SDK_VERSION/sdk" \
+            --out build/sdl-native \
+            --payload-sdk "$HOME/ps5-native-app-boilerplate/.deps/native/ps5-payload-sdk" \
+            --compiler-wrapper "$HOME/ps5-native-app-boilerplate/tooling/prospero-clang18"
+
+      - name: Build the platform layer
+        # libps5platform.a, built against its own copy of the v0.42 SDK
+        # headers (the release the boilerplate's SDK is), where
+        # ps5/package-native.sh expects it.
+        run: make -C "$HOME/ps5-platform-sdk/platform" -j"$(nproc)"
+
+      - name: Build and package the title
+        working-directory: crawl-ref/source
+        run: |
+          make -j"$(nproc)" PS5_NATIVE=y crawl-native.objs
+          bash ps5/package-native.sh --build
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          cp "build-ps5/app/dist/$TITLE_ID.zip" "$GITHUB_WORKSPACE/dist/"
+          (cd "$GITHUB_WORKSPACE/dist" && sha256sum "$TITLE_ID.zip" | tee SHA256SUMS)
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.TITLE_ID }}-${{ env.CONTENT_VERSION }}
+          path: dist/
+
+      - name: Publish release
+        # On a version tag (the content version, e.g. 01.000.001), publish a
+        # pre-release with the title zip as its only asset, as the catalog
+        # requires. An existing release is never changed: a listed asset's
+        # sha256 must not change.
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ "$GITHUB_REF_NAME" == "$CONTENT_VERSION" ]] || {
+            echo "::error::tag $GITHUB_REF_NAME does not match contentVersion $CONTENT_VERSION in sce_sys/param.json"
+            exit 1
+          }
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "::notice::release $GITHUB_REF_NAME already exists; leaving it unchanged"
+            exit 0
+          fi
+          gh release create "$GITHUB_REF_NAME" "dist/$TITLE_ID.zip" \
+            --verify-tag --prerelease \
+            --title "Dungeon Crawl Stone Soup for PS5 $GITHUB_REF_NAME" \
+            --notes "Dungeon Crawl Stone Soup, built as a native PS5 title ($TITLE_ID)."

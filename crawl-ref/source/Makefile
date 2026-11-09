@@ -65,6 +65,9 @@
 #
 #    LINUXDEPLOY   -- path to linuxdeploy tool, required for AppImage builds
 #    ANDROID       -- perform an Android build (see docs/develop/android.txt)
+#    PS5           -- perform a PS5 homebrew build with the ps5-payload-sdk
+#                     (https://github.com/ps5-payload-dev/sdk). Set
+#                     PS5_PAYLOAD_SDK if it isn't in /opt/ps5-payload-sdk.
 #
 # For various mac build tricks oriented at release builds see the various
 # mac-app-* targets as well as the crawl-universal target. (For normal dev
@@ -203,6 +206,47 @@ export uname_S
 #
 # Platform Detection
 #
+ifdef PS5
+	# Tiles with the core profile renderer, linked against the SDL2, Mesa
+	# and other libraries that ship with the ps5-payload-sdk. Lua 5.4 and
+	# SQLite come from the ps5-payload pacbrew packages, not contrib.
+	PS5_PAYLOAD_SDK ?= /opt/ps5-payload-sdk
+	CROSSHOST := x86_64-ps5
+	TILES := y
+	GL_CORE := y
+	COPY_FONTS := y
+	# SDL2_image is a static library that needs libwebp.
+	EXTRA_LIBS += -lwebpdemux -lwebp -lsharpyuv
+	prefix ?= /data/crawl
+	DATADIR ?= data
+	SAVEDIR ?= saves
+endif
+
+ifdef PS5_NATIVE
+	# A native PS5 title (eboot.bin) built with ps5-native-app-boilerplate's
+	# compiler and linked against ps5-opengl's statically linked OpenGL and
+	# SDL2. This builds crawl-native.objs (the game's objects);
+	# ps5/package-native.sh links them into the title. Game data is packaged
+	# in the title's assets/ (mounted at /app0/assets); saves need a
+	# writable location.
+	PS5_NATIVE_TEMPLATE ?= $(HOME)/ps5-native-app-boilerplate
+	PS5_NATIVE_SDK ?= $(PS5_NATIVE_TEMPLATE)/.deps/native/ps5-payload-sdk
+	PS5_SDL2_PREFIX ?= $(HOME)/ps5-opengl/build/sdl-native/sdk
+	# SDL2_image, freetype, libpng, Lua, SQLite and zlib are the PS5 builds
+	# from the boilerplate's pinned PacBrew release, which
+	# tools/setup-pacbrew-dependencies.sh installs.
+	PS5_PACBREW_PREFIX ?= $(PS5_NATIVE_TEMPLATE)/.deps/pacbrew/v0.40.2/sysroot/user/homebrew
+	CROSSHOST := x86_64-sie-ps5
+	TILES := y
+	GL_CORE := y
+	# POSIX regex, which the title's C library lacks: package-native.sh binds
+	# regcomp and its family to mihawk-99's platform layer (musl's TRE).
+	COPY_FONTS := y
+	prefix ?= /app0
+	DATADIR ?= assets
+	SAVEDIR ?= /download0/crawl/
+endif
+
 uname_S := $(shell sh -c 'uname -s 2>/dev/null || echo not')
 uname_M := $(shell sh -c 'uname -m 2>/dev/null || echo not')
 
@@ -212,7 +256,12 @@ ARCH := $(HOST)
 ifdef CROSSHOST
 	# XX is there a way of integrating this with mac cross-compiling?
 	ARCH := $(CROSSHOST)
-	ifneq (,$(shell which $(ARCH)-pkg-config 2>/dev/null))
+	ifdef PS5
+	  PKGCONFIG = $(PS5_PAYLOAD_SDK)/bin/prospero-pkg-config
+	else ifdef PS5_NATIVE
+	  # Include paths are set explicitly below.
+	  NO_PKGCONFIG = YesPlease
+	else ifneq (,$(shell which $(ARCH)-pkg-config 2>/dev/null))
 	  PKGCONFIG = $(ARCH)-pkg-config
 	else
 	  ifneq (,$(wildcard /usr/$(ARCH)/lib/pkgconfig))
@@ -545,6 +594,32 @@ RANLIB := $(CROSSHOST)-ranlib
 STRIP := $(CROSSHOST)-strip
 WINDRES := $(CROSSHOST)-windres
 
+ifdef PS5
+GCC := $(PS5_PAYLOAD_SDK)/bin/prospero-clang
+GXX := $(PS5_PAYLOAD_SDK)/bin/prospero-clang++
+AR := $(PS5_PAYLOAD_SDK)/bin/prospero-ar
+RANLIB := $(PS5_PAYLOAD_SDK)/bin/prospero-ranlib
+STRIP := $(PS5_PAYLOAD_SDK)/bin/prospero-strip
+endif
+
+ifdef PS5_NATIVE
+GCC := env PS5_PAYLOAD_SDK=$(PS5_NATIVE_SDK) sh $(PS5_NATIVE_TEMPLATE)/tooling/prospero-clang18
+GXX := $(GCC)
+AR := llvm-ar-18
+RANLIB := llvm-ranlib-18
+STRIP := true
+CFOTHERS += -D__PROSPERO__ -DUSE_PS5_NATIVE -fPIC -ffunction-sections -fdata-sections
+# The PS5 target defaults to neither; the SDK has libunwind and libc++abi.
+CFOTHERS += -fexceptions -fcxx-exceptions -frtti
+# ps5-opengl's SDL2 headers come first: PacBrew's include/SDL2 also holds
+# its own SDL2's headers, and only SDL_image.h is wanted from it.
+INCLUDES_L += -isystem $(PS5_SDL2_PREFIX)/include/SDL2 \
+              -isystem $(PS5_SDL2_PREFIX)/include \
+              -isystem $(PS5_PACBREW_PREFIX)/include/SDL2 \
+              -isystem $(PS5_PACBREW_PREFIX)/include/freetype2 \
+              -isystem $(PS5_PACBREW_PREFIX)/include
+endif
+
 endif
 
 ifdef USE_ICC
@@ -650,9 +725,18 @@ else
 
 ifndef BUILD_LUA
   ifdef NO_PKGCONFIG
-    BUILD_LUA = yes
+    ifndef PS5_NATIVE
+      BUILD_LUA = yes
+    endif
   endif
 endif
+ifdef PS5
+  # The ps5-payload-lua package (Lua 5.4) installs liblua.a and the Lua
+  # headers into the SDK sysroot but no pkg-config file.
+  LIBS += -llua
+else ifdef PS5_NATIVE
+  # PacBrew's Lua 5.4; package-native.sh links it.
+else
 # You can override the Lua package search with "make LUA_PACKAGE=lua-5.4".
 # pkg-config is still required.
 ifndef LUA_PACKAGE
@@ -694,6 +778,7 @@ ifndef BUILD_LUA
   CFLAGS_L  += $(shell $(PKGCONFIG) $(LUA_PACKAGE) --cflags-only-other)
   LIBS += $(shell $(PKGCONFIG) $(LUA_PACKAGE) --libs)
 endif
+endif # PS5
 
 ifdef USE_LUAJIT
 DEFINES_L += -DUSE_LUAJIT
@@ -701,11 +786,19 @@ endif
 
 ifndef BUILD_SQLITE
   ifdef NO_PKGCONFIG
-    BUILD_SQLITE = yes
+    ifndef PS5_NATIVE
+      BUILD_SQLITE = yes
+    endif
   endif
 endif
 ifndef BUILD_SQLITE
- ifneq ($(shell $(PKGCONFIG) sqlite3 --exists || echo no),)
+ ifdef PS5
+   # The ps5-payload-sqlite package installs libsqlite3.a and sqlite3.h
+   # into the SDK sysroot but no pkg-config file.
+   LIBS += -lsqlite3
+ else ifdef PS5_NATIVE
+   # PacBrew's SQLite; package-native.sh links it.
+ else ifneq ($(shell $(PKGCONFIG) sqlite3 --exists || echo no),)
    BUILD_SQLITE = yes
  else
    INCLUDES_L += $(shell $(PKGCONFIG) sqlite3 --cflags-only-I | sed -e 's/-I/-isystem /')
@@ -747,6 +840,12 @@ DEFINES_L += -DUSE_SDL -DUSE_GL -DUSE_FT
 
 ifdef GLES
 DEFINES_L += -DUSE_GLES
+endif
+
+# GL_CORE=y uses the shader-based OpenGL 3.3 core profile renderer instead of
+# the fixed-function pipeline (needed on platforms without legacy OpenGL).
+ifdef GL_CORE
+DEFINES_L += -DUSE_GL_CORE
 endif
 
 ifndef NO_PKGCONFIG
@@ -1703,6 +1802,17 @@ distclean: clean clean-contrib clean-rltiles
 
 $(GAME): $(GAME_OBJS) $(CONTRIB_LIBS) dat/dlua/tags.lua
 	+$(QUIET_LINK)$(CXX) $(LDFLAGS) $(GAME_OBJS) -o $(GAME) $(LIBS)
+
+# PS5 native title: the game's objects, linked into eboot.bin by
+# ps5/package-native.sh together with the contrib libraries.
+crawl-native.a: $(GAME_OBJS) $(CONTRIB_LIBS) dat/dlua/tags.lua
+	$(RM) $@
+	$(AR) rcs $@ $(GAME_OBJS)
+
+# Every object is linked, not just the ones main() pulls in from the archive,
+# so the list is passed to the linker as well.
+crawl-native.objs: crawl-native.a
+	@printf '%s\n' $(abspath $(GAME_OBJS)) > $@
 
 util/monster/vault_monster_data.h: dat/des util/gather_mons
 	util/gather_mons -v > $@

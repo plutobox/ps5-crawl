@@ -25,11 +25,16 @@
 #endif
 
 #include "cio.h"
+#include "env.h"
 #include "files.h"
 #include "glwrapper.h"
 #include "libutil.h"
 #include "options.h"
+#include "player.h"
+#include "state.h"
 #include "syscalls.h"
+#include "terrain.h"
+#include "ui.h"
 #include "unicode.h"
 #include "version.h"
 #include "windowmanager.h"
@@ -458,6 +463,12 @@ int SDLWrapper::init(coord_def *m_windowsz)
         return false;
     }
 
+    // Game controllers are optional: without them Crawl still works with a
+    // keyboard. Already-connected controllers arrive as
+    // SDL_CONTROLLERDEVICEADDED events.
+    if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) != 0)
+        printf("Game controller support unavailable: %s\n", SDL_GetError());
+
     int cur_display;
 #ifdef __ANDROID__
     cur_display = 0;
@@ -496,6 +507,18 @@ int SDLWrapper::init(coord_def *m_windowsz)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
     SDL_SetHint(SDL_HINT_ANDROID_SEPARATE_MOUSE_AND_TOUCH, "1");
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "1");
+#endif
+#ifdef USE_GL_CORE
+    // The shader-based renderer in glwrapper-ogl.cc needs OpenGL 3.3 core.
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,
+                        SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+# ifdef __APPLE__
+    // macOS only provides core profiles as forward-compatible contexts.
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS,
+                        SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+# endif
 #endif
 
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
@@ -558,6 +581,14 @@ int SDLWrapper::init(coord_def *m_windowsz)
         set_window_placement(m_windowsz);
 #endif
     }
+
+#ifdef USE_PS5_NATIVE
+    // ps5-opengl's SDL video driver supports exactly one fixed OpenGL window
+    // the size of the video output.
+    flags = SDL_WINDOW_OPENGL;
+    m_windowsz->x = _desktop_width;
+    m_windowsz->y = _desktop_height;
+#endif
 
     string title = string(CRAWL " ") + Version::Long;
     m_window = SDL_CreateWindow(title.c_str(),
@@ -929,6 +960,306 @@ int SDLWrapper::send_textinput(wm_event *event)
     return 1;
 }
 
+/////////////////////////////////////////////////////////////////////////////
+// Game controller support
+//
+// Controller input is translated into the key presses Crawl already
+// understands, so every menu, prompt and targeting mode works without
+// changes. The layout depends on what the game is waiting for:
+//
+//   button (Xbox / PlayStation)   in the dungeon        menus and prompts
+//   left stick / d-pad            move (8 directions)   move cursor
+//   A / Cross                     stairs or pick up     confirm (Enter)
+//   B / Circle                    cancel (Esc)          cancel (Esc)
+//   X / Square                    cast spell (z)
+//   Y / Triangle                  inventory (i)
+//   LB / L1                       wait (s)              previous page
+//   RB / R1                       fire (f)              next page / fire
+//   LT / L2                       autoexplore (o)
+//   RT / R2                       autofight (Tab)
+//   L3                            examine (x)
+//   R3                            rest (5)
+//   Back / Create                 abilities (a)
+//   Start / Options               game menu (~)         cancel (Esc)
+//   touchpad                      level map (X)
+//
+// Directions repeat while held, like a held key.
+
+namespace
+{
+const Sint16 PAD_STICK_THRESHOLD = 16000;
+const Sint16 PAD_TRIGGER_THRESHOLD = 16000;
+const Uint32 PAD_REPEAT_DELAY_MS = 300;
+const Uint32 PAD_REPEAT_RATE_MS = 120;
+
+enum class pad_mode
+{
+    command, // the main game is waiting for a command
+    menu,    // a menu or popup is open
+    other,   // targeting, the level map, and other prompts
+};
+
+Uint32 pad_repeat_event_type = (Uint32)-1;
+SDL_TimerID pad_repeat_timer = 0;
+int pad_repeat_key = 0;   // direction key repeating while held, or 0
+int pad_dpad_key = 0;     // direction held on the d-pad, or 0
+int pad_dpad_button = -1; // the d-pad button producing pad_dpad_key
+int pad_stick_key = 0;    // direction held on the left stick, or 0
+bool pad_trigger_held[2] = { false, false };
+
+pad_mode _pad_mode()
+{
+    if (ui::has_layout())
+        return pad_mode::menu;
+    if (crawl_state.waiting_for_command)
+        return pad_mode::command;
+    return pad_mode::other;
+}
+
+// What Cross/A does in the dungeon: take the stairs or pick up items.
+int _pad_context_key()
+{
+    switch (feat_stair_direction(env.grid(you.pos())))
+    {
+    case CMD_GO_DOWNSTAIRS:
+        return '>';
+    case CMD_GO_UPSTAIRS:
+        return '<';
+    default:
+        break;
+    }
+    if (you.visible_igrd(you.pos()) != NON_ITEM)
+        return 'g';
+    return 0;
+}
+
+int _pad_button_key(Uint8 button)
+{
+    const pad_mode mode = _pad_mode();
+    const bool cmd = mode == pad_mode::command;
+    switch (button)
+    {
+    case SDL_CONTROLLER_BUTTON_A:
+        return cmd ? _pad_context_key() : CK_ENTER;
+    case SDL_CONTROLLER_BUTTON_B:
+        return CK_ESCAPE;
+    case SDL_CONTROLLER_BUTTON_X:
+        return cmd ? 'z' : 0;
+    case SDL_CONTROLLER_BUTTON_Y:
+        return cmd ? 'i' : 0;
+    case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
+        return cmd ? 's' : mode == pad_mode::menu ? CK_PGUP : 0;
+    case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
+        // In targeting, 'f' fires at the target.
+        return cmd ? 'f' : mode == pad_mode::menu ? int{CK_PGDN} : 'f';
+    case SDL_CONTROLLER_BUTTON_LEFTSTICK:
+        return cmd ? 'x' : 0;
+    case SDL_CONTROLLER_BUTTON_RIGHTSTICK:
+        return cmd ? '5' : 0;
+    case SDL_CONTROLLER_BUTTON_BACK:
+        return cmd ? 'a' : 0;
+    case SDL_CONTROLLER_BUTTON_START:
+        return cmd ? '~' : int{CK_ESCAPE};
+#if SDL_VERSION_ATLEAST(2, 0, 14)
+    case SDL_CONTROLLER_BUTTON_TOUCHPAD:
+        return cmd ? 'X' : 0;
+#endif
+    default:
+        return 0;
+    }
+}
+
+// The key for a direction; dx and dy are -1, 0 or 1. Diagonals use the
+// keypad keys, which move diagonally in the dungeon, targeting and the map.
+int _pad_direction_key(int dx, int dy)
+{
+    // Menus scroll with Home/End/PgUp/PgDn, so only go straight there.
+    if (dx && dy && _pad_mode() == pad_mode::menu)
+        dx = 0;
+    if (dx < 0 && dy < 0)
+        return CK_HOME;
+    if (dx > 0 && dy < 0)
+        return CK_PGUP;
+    if (dx < 0 && dy > 0)
+        return CK_END;
+    if (dx > 0 && dy > 0)
+        return CK_PGDN;
+    if (dy < 0)
+        return CK_UP;
+    if (dy > 0)
+        return CK_DOWN;
+    if (dx < 0)
+        return CK_LEFT;
+    if (dx > 0)
+        return CK_RIGHT;
+    return 0;
+}
+
+bool _pad_dpad_direction(Uint8 button, int &dx, int &dy)
+{
+    dx = dy = 0;
+    switch (button)
+    {
+    case SDL_CONTROLLER_BUTTON_DPAD_UP:    dy = -1; return true;
+    case SDL_CONTROLLER_BUTTON_DPAD_DOWN:  dy = 1;  return true;
+    case SDL_CONTROLLER_BUTTON_DPAD_LEFT:  dx = -1; return true;
+    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: dx = 1;  return true;
+    default: return false;
+    }
+}
+
+// Which of eight directions the left stick points in, or 0 if centred.
+int _pad_stick_key(SDL_GameController *pad)
+{
+    const float x = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTX);
+    const float y = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTY);
+    const float mag = sqrtf(x * x + y * y);
+    if (mag < PAD_STICK_THRESHOLD)
+        return 0;
+    // An axis counts if the stick is within 67.5 degrees of it
+    // (sin 22.5 = 0.38), which splits the circle into eight sectors.
+    const int dx = fabsf(x) >= 0.38f * mag ? (x > 0 ? 1 : -1) : 0;
+    const int dy = fabsf(y) >= 0.38f * mag ? (y > 0 ? 1 : -1) : 0;
+    return _pad_direction_key(dx, dy);
+}
+
+Uint32 _pad_repeat_callback(Uint32 interval, void *param)
+{
+    UNUSED(param);
+    SDL_Event event;
+    SDL_zero(event);
+    event.type = pad_repeat_event_type;
+    SDL_PushEvent(&event);
+    return interval == PAD_REPEAT_DELAY_MS ? PAD_REPEAT_RATE_MS : interval;
+}
+
+void _pad_stop_repeat()
+{
+    if (pad_repeat_timer)
+        SDL_RemoveTimer(pad_repeat_timer);
+    pad_repeat_timer = 0;
+    pad_repeat_key = 0;
+}
+
+void _pad_start_repeat(int key)
+{
+    _pad_stop_repeat();
+    if (pad_repeat_event_type == (Uint32)-1)
+        pad_repeat_event_type = SDL_RegisterEvents(1);
+    if (pad_repeat_event_type == (Uint32)-1)
+        return;
+    pad_repeat_key = key;
+    pad_repeat_timer = SDL_AddTimer(PAD_REPEAT_DELAY_MS, _pad_repeat_callback,
+                                    nullptr);
+}
+
+// Fill in a key press. Returns 1 if there is one to deliver.
+int _pad_key_event(wm_event *event, int key)
+{
+    if (!key)
+        return 0;
+    event->type = WME_KEYDOWN;
+    event->key.state = SDL_PRESSED;
+    event->key.keysym.scancode = 0;
+    event->key.keysym.key_mod = 0;
+    event->key.keysym.unicode = key;
+    event->key.keysym.sym = key;
+    return 1;
+}
+
+// A direction input changed: send the new direction (if any) and repeat it
+// while it is held.
+int _pad_direction_changed(wm_event *event)
+{
+    const int key = pad_dpad_key ? pad_dpad_key : pad_stick_key;
+    if (key == pad_repeat_key)
+        return 0;
+    if (!key)
+    {
+        _pad_stop_repeat();
+        return 0;
+    }
+    _pad_start_repeat(key);
+    return _pad_key_event(event, key);
+}
+}
+
+static int _handle_controller_event(const SDL_Event &sdlevent, wm_event *event)
+{
+    switch (sdlevent.type)
+    {
+    case SDL_CONTROLLERDEVICEADDED:
+        if (SDL_IsGameController(sdlevent.cdevice.which))
+            SDL_GameControllerOpen(sdlevent.cdevice.which);
+        return 0;
+
+    case SDL_CONTROLLERDEVICEREMOVED:
+        if (SDL_GameController *pad
+                = SDL_GameControllerFromInstanceID(sdlevent.cdevice.which))
+        {
+            SDL_GameControllerClose(pad);
+        }
+        pad_dpad_key = pad_stick_key = 0;
+        pad_dpad_button = -1;
+        _pad_stop_repeat();
+        return 0;
+
+    case SDL_CONTROLLERBUTTONDOWN:
+    {
+        int dx, dy;
+        if (_pad_dpad_direction(sdlevent.cbutton.button, dx, dy))
+        {
+            pad_dpad_button = sdlevent.cbutton.button;
+            pad_dpad_key = _pad_direction_key(dx, dy);
+            return _pad_direction_changed(event);
+        }
+        return _pad_key_event(event, _pad_button_key(sdlevent.cbutton.button));
+    }
+
+    case SDL_CONTROLLERBUTTONUP:
+        if (sdlevent.cbutton.button == pad_dpad_button)
+        {
+            pad_dpad_button = -1;
+            pad_dpad_key = 0;
+            return _pad_direction_changed(event);
+        }
+        return 0;
+
+    case SDL_CONTROLLERAXISMOTION:
+    {
+        const SDL_ControllerAxisEvent &axis = sdlevent.caxis;
+        if (axis.axis == SDL_CONTROLLER_AXIS_LEFTX
+            || axis.axis == SDL_CONTROLLER_AXIS_LEFTY)
+        {
+            SDL_GameController *pad
+                = SDL_GameControllerFromInstanceID(axis.which);
+            if (!pad)
+                return 0;
+            pad_stick_key = _pad_stick_key(pad);
+            return _pad_direction_changed(event);
+        }
+        if (axis.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT
+            || axis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT)
+        {
+            const bool right = axis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT;
+            const bool held = axis.value > PAD_TRIGGER_THRESHOLD;
+            if (held == pad_trigger_held[right])
+                return 0;
+            pad_trigger_held[right] = held;
+            if (!held || _pad_mode() != pad_mode::command)
+                return 0;
+            return _pad_key_event(event, right ? int{CK_TAB} : 'o');
+        }
+        return 0;
+    }
+
+    default:
+        if (sdlevent.type == pad_repeat_event_type && pad_repeat_key)
+            return _pad_key_event(event, pad_repeat_key);
+        return 0;
+    }
+}
+
 int SDLWrapper::wait_event(wm_event *event, int timeout)
 {
     SDL_Event sdlevent;
@@ -1026,7 +1357,7 @@ int SDLWrapper::wait_event(wm_event *event, int timeout)
         break;
 
     default:
-        return 0;
+        return _handle_controller_event(sdlevent, event);
     }
 
     return 1;

@@ -96,9 +96,11 @@ replace_once "$out/tools/build.sh" \
 # them), is refused (the sandbox fails them, or a raw system call raises
 # SIGSYS) or gets wrong, bound to the platform layer's ps5_ versions. A title
 # must not define libc's own names, so they are bound at link time.
+# Not sysconf: ps5_sysconf calls sysconf, which the binding would turn into
+# a call to itself.
 platform_functions=(access closedir fchown fork getcwd isatty localeconv
                     localtime_r mkstemp opendir readdir readlink regcomp
-                    regerror regexec regfree strcasestr sysconf)
+                    regerror regexec regfree strcasestr)
 defsyms=()
 for function in "${platform_functions[@]}"; do
     defsyms+=("--defsym=$function=ps5_$function")

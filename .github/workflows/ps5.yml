@@ -143,6 +143,18 @@ jobs:
           makepkg -c -f
           sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
 
+      - name: Build PS5 libjpeg-turbo package
+        working-directory: pacbrew-repo/libjpeg-turbo
+        run: |
+          makepkg -c -f
+          sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
+
+      - name: Build PS5 libwebp package
+        working-directory: pacbrew-repo/libwebp
+        run: |
+          makepkg -c -f
+          sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
+
       - name: Build PS5 SDL2_image package
         working-directory: pacbrew-repo/SDL2_image
         run: |

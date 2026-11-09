@@ -82,15 +82,21 @@ jobs:
           makepkg -c -f
           sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
 
-      - name: Build PS5 luajit package
-        working-directory: pacbrew-repo/luajit
-
+      - name: Build PS5 libcxx package
+        working-directory: pacbrew-repo/libcxx
+        run: |
+          makepkg -c -f
+          sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
+  
+      - name: Build PS5 openlibm package
+        working-directory: pacbrew-repo/openlibm
         run: |
           makepkg -c -f
           sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
 
-      - name: Build PS5 openlibm package
-        working-directory: pacbrew-repo/openlibm
+      - name: Build PS5 luajit package
+        working-directory: pacbrew-repo/luajit
+
         run: |
           makepkg -c -f
           sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz

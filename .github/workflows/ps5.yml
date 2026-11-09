@@ -1,5 +1,17 @@
 name: PS5 Build and Release
 
+# The homebrew catalog's versioning rules (docs/versioning.md in
+# darkxex/ps5-homebrew-catalog): contentVersion in sce_sys/param.json is
+# NN.NNN.NNN, rises with every release, and the release tag is that value.
+# crawl-ref/source/ps5/content-version.py enforces them.
+#
+# - Every push and pull request: build both, kept as CI artifacts.
+# - Run it by hand on ps5-port with "release" set to patch, minor or major:
+#   raise contentVersion, build the title from that, then commit the bump, tag
+#   it with the new version and publish the release, in that order, so a
+#   failed build leaves nothing behind. "current" releases the committed
+#   contentVersion as it is (after raising it by hand).
+# - A version tag pushed by hand, equal to contentVersion: publish its release.
 on:
   push:
     paths-ignore:
@@ -8,6 +20,16 @@ on:
     paths-ignore:
       - "**/*.md"
   workflow_dispatch:
+    inputs:
+      release:
+        description: Publish a native release, raising contentVersion by this part
+        type: choice
+        options: [none, patch, minor, major, current]
+        default: none
+      notes:
+        description: Release notes (Markdown; short headings and bullet lists). Empty lists the commits since the last release.
+        type: string
+        default: ''
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
@@ -114,16 +136,34 @@ jobs:
             libpng-dev lld-18 llvm-18 ninja-build perl pkg-config python3 \
             python3-yaml tar unzip wget zip
 
-      - name: Read title metadata
+      - name: Choose the version
         # sce_sys/param.json is the committed copy the catalog reads; the
         # build uses the same title ID and content version.
+        env:
+          RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.release || 'none' }}
         run: |
-          python3 - >> "$GITHUB_ENV" <<'PY'
-          import json
-          param = json.load(open("sce_sys/param.json"))
-          print(f"TITLE_ID={param['titleId']}")
-          print(f"CONTENT_VERSION={param['contentVersion']}")
-          PY
+          cv="python3 crawl-ref/source/ps5/content-version.py"
+          echo "TITLE_ID=$(python3 -c 'import json; print(json.load(open("sce_sys/param.json"))["titleId"])')" >> "$GITHUB_ENV"
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" =~ ^[0-9]{2}\.[0-9]{3}\.[0-9]{3}$ ]]; then
+            version=$($cv current)
+            [[ "$GITHUB_REF_NAME" == "$version" ]] || {
+              echo "::error::tag $GITHUB_REF_NAME does not match contentVersion $version in sce_sys/param.json"
+              exit 1
+            }
+            $cv check "$version"
+            echo "RELEASE_TAG=$version" >> "$GITHUB_ENV"
+          elif [[ "$RELEASE" != none ]]; then
+            [[ "$GITHUB_REF" == refs/heads/ps5-port ]] || {
+              echo "::error::release from the ps5-port branch, not $GITHUB_REF"
+              exit 1
+            }
+            version=$($cv bump "$RELEASE")
+            echo "RELEASE_TAG=$version" >> "$GITHUB_ENV"
+            echo "::notice::releasing contentVersion $version"
+          else
+            version=$($cv current)
+          fi
+          echo "CONTENT_VERSION=$version" >> "$GITHUB_ENV"
 
       - name: Fetch native toolchain
         env:
@@ -197,24 +237,59 @@ jobs:
           name: ${{ env.TITLE_ID }}-${{ env.CONTENT_VERSION }}
           path: dist/
 
+      - name: Write release notes
+        if: env.RELEASE_TAG != ''
+        env:
+          NOTES: ${{ github.event_name == 'workflow_dispatch' && inputs.notes || '' }}
+        # The catalog shows these as the app's release notes: what changed
+        # first, short headings and bullet lists, no images or links. The
+        # commits are ps5-port's own (first parent), not merged upstream ones.
+        run: |
+          previous=$(git tag --list '[0-9][0-9].[0-9][0-9][0-9].[0-9][0-9][0-9]' --sort=-v:refname \
+            | grep -vx "$RELEASE_TAG" | head -n 1 || true)
+          {
+            if [[ -n "$NOTES" ]]; then
+              printf '%s\n' "$NOTES"
+            elif [[ -n "$previous" ]]; then
+              echo "## Changes since $previous"
+              echo
+              git log --first-parent --no-merges --format='- %s' "$previous..HEAD"
+            else
+              echo "## First release"
+              echo
+              echo "- Dungeon Crawl Stone Soup, built as a native PS5 title ($TITLE_ID)."
+            fi
+          } > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+
+      - name: Commit and tag the new version
+        if: env.RELEASE_TAG != '' && github.ref_type != 'tag'
+        # Pushes made with the workflow's token start no other workflow, so
+        # this doesn't rebuild itself.
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- sce_sys/param.json; then
+            git commit -q -m "PS5 native: contentVersion $RELEASE_TAG" -- sce_sys/param.json
+          fi
+          git tag -a "$RELEASE_TAG" -m "Dungeon Crawl Stone Soup for PS5 $RELEASE_TAG"
+          # Atomic: if ps5-port moved during the build, neither the bump nor
+          # the tag lands, and nothing is released.
+          git push --atomic origin "HEAD:refs/heads/ps5-port" "refs/tags/$RELEASE_TAG"
+
       - name: Publish release
-        # On a version tag (the content version, e.g. 01.000.001), publish a
-        # pre-release with the title zip as its only asset, as the catalog
+        # A pre-release with the title zip as its only asset, as the catalog
         # requires. An existing release is never changed: a listed asset's
         # sha256 must not change.
-        if: startsWith(github.ref, 'refs/tags/')
+        if: env.RELEASE_TAG != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          [[ "$GITHUB_REF_NAME" == "$CONTENT_VERSION" ]] || {
-            echo "::error::tag $GITHUB_REF_NAME does not match contentVersion $CONTENT_VERSION in sce_sys/param.json"
-            exit 1
-          }
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "::notice::release $GITHUB_REF_NAME already exists; leaving it unchanged"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "::notice::release $RELEASE_TAG already exists; leaving it unchanged"
             exit 0
           fi
-          gh release create "$GITHUB_REF_NAME" "dist/$TITLE_ID.zip" \
+          gh release create "$RELEASE_TAG" "dist/$TITLE_ID.zip" \
             --verify-tag --prerelease \
-            --title "Dungeon Crawl Stone Soup for PS5 $GITHUB_REF_NAME" \
-            --notes "Dungeon Crawl Stone Soup, built as a native PS5 title ($TITLE_ID)."
+            --title "Dungeon Crawl Stone Soup for PS5 $RELEASE_TAG" \
+            --notes-file "$RUNNER_TEMP/notes.md"

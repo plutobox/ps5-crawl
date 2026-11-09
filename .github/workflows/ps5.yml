@@ -67,42 +67,182 @@ jobs:
           sudo tar xzf /tmp/ps5-payload-dev.tar.gz -C /
           rm /tmp/ps5-payload-dev.tar.gz
 
+name: PS5 Build and Release
+
+on:
+  push:
+    paths-ignore:
+      - "**/*.md"
+  pull_request:
+    paths-ignore:
+      - "**/*.md"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    outputs:
+      archive_name: ${{ steps.package.outputs.archive_name }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Payload
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout pacbrew-repo
+        uses: actions/checkout@v4
+        with:
+          repository: ps5-payload-dev/pacbrew-repo
+          path: pacbrew-repo
+
+      - name: Checkout SDK stubs
+        uses: actions/checkout@v4
+        with:
+          repository: ps5-payload-dev/sdk
+          path: ps5-sdk
+
+      - name: Setup build environment
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            autoconf \
+            automake \
+            build-essential \
+            clang-18 \
+            cmake \
+            curl \
+            git \
+            libarchive-tools \
+            libtool \
+            lld-18 \
+            makepkg \
+            meson \
+            nasm \
+            pacman-package-manager \
+            patch \
+            pkg-config \
+            python3 \
+            python3-yaml \
+            xxd \
+            perl \
+            zip 
+
+
+      - name: Configure pacman for locally built packages
+        run: |
+          sudo install -d -m 755 /var/lib/pacman/local /var/cache/pacman/pkg
+          sudo tee /etc/pacman.conf > /dev/null <<'EOF'
+          [options]
+          Architecture = auto
+          SigLevel = Required DatabaseOptional
+          LocalFileSigLevel = Optional
+          EOF
+
+      - name: Build PS5 payload SDK
+        working-directory: pacbrew-repo/sdk
+        run: |
+          makepkg -c -f
+          sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
+
+      - name: Build PS5 lua package
+        working-directory: pacbrew-repo/lua
+        run: |
+          makepkg -c -f
+          sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
+
+      - name: Build PS5 openlibm package
+        working-directory: pacbrew-repo/openlibm
+        run: |
+          makepkg -c -f
+          sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
+
+      - name: Build PS5 zlib package
+        working-directory: pacbrew-repo/zlib
+        run: |
+          makepkg -c -f
+          sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
+
+      - name: Build PS5 libpng package
+        working-directory: pacbrew-repo/libpng
+        run: |
+          makepkg -c -f
+          sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
+
+      - name: Build PS5 sqlite package
+        working-directory: pacbrew-repo/sqlite
+        run: |
+          makepkg -c -f
+          sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
+
+      - name: Build PS5 freetype package
+        working-directory: pacbrew-repo/freetype
+        run: |
+          makepkg -c -f
+          sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
+
+      - name: Build PS5 SDL2 package
+        working-directory: pacbrew-repo/SDL2
+        run: |
+          makepkg -c -f
+          sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
+
+
+      - name: Build PS5 SDL2_image package
+        working-directory: pacbrew-repo/SDL2_image
+        run: |
+          makepkg -c -f
+          sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
+
+
+      - name: Clone a Public Repo
+        uses: actions/checkout@v4
+        with:
+          repository: 'crawl/crawl'
+          path: 'crawl' # Clones into a directory named 'my-sub-folder'
+
       - name: Build
-        working-directory: crawl-ref/source
+        working-directory: crawl/crawl-ref/source
         run: |
           make -j"$(nproc)" PS5=y install DESTDIR="$RUNNER_TEMP/stage"
           echo "CRAWL_VERSION=$(git describe)" >> "$GITHUB_ENV"
 
-      - name: Package
-        run: |
-          mkdir -p dist
-          cp "$RUNNER_TEMP/stage/data/crawl/bin/crawl" dist/crawl-ps5.elf
-          (cd "$RUNNER_TEMP/stage" && zip -qr "$GITHUB_WORKSPACE/dist/crawl-ps5.zip" .)
-          (cd dist && sha256sum crawl-ps5.elf crawl-ps5.zip | tee SHA256SUMS)
+      # - name: Package
+      #   run: |
+      #     mkdir -p dist
+      #     cp "$RUNNER_TEMP/stage/data/crawl/bin/crawl" dist/crawl-ps5.elf
+      #     (cd "$RUNNER_TEMP/stage" && zip -qr "$GITHUB_WORKSPACE/dist/crawl-ps5.zip" .)
+      #     (cd dist && sha256sum crawl-ps5.elf crawl-ps5.zip | tee SHA256SUMS)
 
-      - name: Attest build provenance
-        if: github.event_name != 'pull_request'
-        uses: actions/attest-build-provenance@v4
-        with:
-          subject-path: |
-            dist/crawl-ps5.elf
-            dist/crawl-ps5.zip
+      # - name: Attest build provenance
+      #   if: github.event_name != 'pull_request'
+      #   uses: actions/attest-build-provenance@v4
+      #   with:
+      #     subject-path: |
+      #       dist/crawl-ps5.elf
+      #       dist/crawl-ps5.zip
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: crawl-ps5-${{ env.CRAWL_VERSION }}
-          path: dist/
+      # - name: Upload artifact
+      #   uses: actions/upload-artifact@v7
+      #   with:
+      #     name: crawl-ps5-${{ env.CRAWL_VERSION }}
+      #     path: dist/
 
-      - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/ps5-')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" \
-            dist/crawl-ps5.zip dist/crawl-ps5.elf dist/SHA256SUMS \
-            --prerelease \
-            --title "Crawl for PS5 $GITHUB_REF_NAME" \
-            --notes "Dungeon Crawl Stone Soup $CRAWL_VERSION built for PS5 homebrew.
+      # - name: Publish release
+      #   if: startsWith(github.ref, 'refs/tags/ps5-')
+      #   env:
+      #     GH_TOKEN: ${{ github.token }}
+      #   run: |
+      #     gh release create "$GITHUB_REF_NAME" \
+      #       dist/crawl-ps5.zip dist/crawl-ps5.elf dist/SHA256SUMS \
+      #       --prerelease \
+      #       --title "Crawl for PS5 $GITHUB_REF_NAME" \
+      #       --notes "Dungeon Crawl Stone Soup $CRAWL_VERSION built for PS5 homebrew.
 
-          Provenance: \`gh attestation verify crawl-ps5.zip --repo $GITHUB_REPOSITORY\`"
+      #     Provenance: \`gh attestation verify crawl-ps5.zip --repo $GITHUB_REPOSITORY\`"

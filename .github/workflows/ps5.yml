@@ -98,19 +98,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Checkout contrib submodules
-        # The native title links its own builds of these with the title's
-        # compiler (see the PS5_NATIVE settings in the Makefile).
+      - name: Checkout fonts and PCRE submodules
+        # Every other library is a PS5 build from PacBrew. PacBrew has no
+        # PCRE, and the title's C library has no POSIX regex.
         run: |
           git submodule update --init --depth 1 \
             crawl-ref/source/contrib/fonts \
-            crawl-ref/source/contrib/freetype \
-            crawl-ref/source/contrib/libpng \
-            crawl-ref/source/contrib/lua \
-            crawl-ref/source/contrib/pcre \
-            crawl-ref/source/contrib/sdl2-image \
-            crawl-ref/source/contrib/sqlite \
-            crawl-ref/source/contrib/zlib
+            crawl-ref/source/contrib/pcre
 
       - name: Setup build environment
         run: |
@@ -138,6 +132,9 @@ jobs:
           git clone -q https://github.com/drakmor/ps5-native-app-boilerplate "$HOME/ps5-native-app-boilerplate"
           git -C "$HOME/ps5-native-app-boilerplate" checkout -q "$BOILERPLATE_REV"
           bash "$HOME/ps5-native-app-boilerplate/tools/setup-native-dependencies.sh"
+          # The boilerplate's pinned PacBrew release: SDL2_image, freetype,
+          # libpng, zlib, Lua and SQLite built for PS5.
+          bash "$HOME/ps5-native-app-boilerplate/tools/setup-pacbrew-dependencies.sh" --all
 
           git clone -q https://github.com/darkxex/ps5-opengl "$HOME/ps5-opengl"
           git -C "$HOME/ps5-opengl" checkout -q "$PS5_OPENGL_REV"

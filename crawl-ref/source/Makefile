@@ -225,22 +225,21 @@ endif
 ifdef PS5_NATIVE
 	# A native PS5 title (eboot.bin) built with ps5-native-app-boilerplate's
 	# compiler and linked against ps5-opengl's statically linked OpenGL and
-	# SDL2. This builds crawl-native.a (the game and its contrib libraries);
-	# ps5/package-native.sh links it into the title. Game data is packaged
+	# SDL2. This builds crawl-native.objs (the game's objects);
+	# ps5/package-native.sh links them into the title. Game data is packaged
 	# in the title's assets/ (mounted at /app0/assets); saves need a
 	# writable location.
 	PS5_NATIVE_TEMPLATE ?= $(HOME)/ps5-native-app-boilerplate
 	PS5_NATIVE_SDK ?= $(PS5_NATIVE_TEMPLATE)/.deps/native/ps5-payload-sdk
 	PS5_SDL2_PREFIX ?= $(HOME)/ps5-opengl/build/sdl-native/sdk
+	# SDL2_image, freetype, libpng, Lua, SQLite and zlib are the PS5 builds
+	# from the boilerplate's pinned PacBrew release, which
+	# tools/setup-pacbrew-dependencies.sh installs.
+	PS5_PACBREW_PREFIX ?= $(PS5_NATIVE_TEMPLATE)/.deps/pacbrew/v0.40.2/sysroot/user/homebrew
 	CROSSHOST := x86_64-sie-ps5
 	TILES := y
 	GL_CORE := y
-	BUILD_LUA := y
-	BUILD_SQLITE := y
-	BUILD_ZLIB := y
-	BUILD_LIBPNG := y
-	BUILD_FREETYPE := y
-	# The title's C library has no POSIX regex.
+	# The title's C library has no POSIX regex, and PacBrew has no PCRE.
 	BUILD_PCRE := y
 	COPY_FONTS := y
 	prefix ?= /app0
@@ -612,11 +611,16 @@ STRIP := true
 CFOTHERS += -D__PROSPERO__ -DUSE_PS5_NATIVE -fPIC -ffunction-sections -fdata-sections
 # The PS5 target defaults to neither; the SDK has libunwind and libc++abi.
 CFOTHERS += -fexceptions -fcxx-exceptions -frtti
-# Lua and libpng use the BSD _setjmp/_longjmp, which the title's C library
-# only has as setjmp/longjmp.
+# PCRE's BSD _setjmp/_longjmp: the title's C library only has
+# setjmp/longjmp.
 CFOTHERS += -D_setjmp=setjmp -D_longjmp=longjmp
+# ps5-opengl's SDL2 headers come first: PacBrew's include/SDL2 also holds
+# its own SDL2's headers, and only SDL_image.h is wanted from it.
 INCLUDES_L += -isystem $(PS5_SDL2_PREFIX)/include/SDL2 \
-              -isystem $(PS5_SDL2_PREFIX)/include -isystem contrib/sdl2-image
+              -isystem $(PS5_SDL2_PREFIX)/include \
+              -isystem $(PS5_PACBREW_PREFIX)/include/SDL2 \
+              -isystem $(PS5_PACBREW_PREFIX)/include/freetype2 \
+              -isystem $(PS5_PACBREW_PREFIX)/include
 endif
 
 endif
@@ -724,13 +728,17 @@ else
 
 ifndef BUILD_LUA
   ifdef NO_PKGCONFIG
-    BUILD_LUA = yes
+    ifndef PS5_NATIVE
+      BUILD_LUA = yes
+    endif
   endif
 endif
 ifdef PS5
   # The ps5-payload-lua package (Lua 5.4) installs liblua.a and the Lua
   # headers into the SDK sysroot but no pkg-config file.
   LIBS += -llua
+else ifdef PS5_NATIVE
+  # PacBrew's Lua 5.4; package-native.sh links it.
 else
 # You can override the Lua package search with "make LUA_PACKAGE=lua-5.4".
 # pkg-config is still required.
@@ -781,7 +789,9 @@ endif
 
 ifndef BUILD_SQLITE
   ifdef NO_PKGCONFIG
-    BUILD_SQLITE = yes
+    ifndef PS5_NATIVE
+      BUILD_SQLITE = yes
+    endif
   endif
 endif
 ifndef BUILD_SQLITE
@@ -789,6 +799,8 @@ ifndef BUILD_SQLITE
    # The ps5-payload-sqlite package installs libsqlite3.a and sqlite3.h
    # into the SDK sysroot but no pkg-config file.
    LIBS += -lsqlite3
+ else ifdef PS5_NATIVE
+   # PacBrew's SQLite; package-native.sh links it.
  else ifneq ($(shell $(PKGCONFIG) sqlite3 --exists || echo no),)
    BUILD_SQLITE = yes
  else

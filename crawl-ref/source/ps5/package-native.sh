@@ -18,6 +18,8 @@
 #   PS5_OPENGL_REPO      ps5-opengl checkout (for native-app/)
 #   PS5_OPENGL_PREFIX    installed ps5-opengl SDK (include/, lib/)
 #   PS5_SDL2_PREFIX      SDL2 built by ps5-opengl's integration/SDL2/build.py
+#   PS5_PACBREW_PREFIX   the boilerplate's PacBrew ports (user/homebrew), from
+#                        tools/setup-pacbrew-dependencies.sh --all
 #   TITLE_ID, TITLE_NAME, CONTENT_VERSION
 set -euo pipefail
 
@@ -26,11 +28,10 @@ template=${PS5_NATIVE_TEMPLATE:-$HOME/ps5-native-app-boilerplate}
 opengl_repo=${PS5_OPENGL_REPO:-$HOME/ps5-opengl}
 opengl=${PS5_OPENGL_PREFIX:-$HOME/ps5-opengl-sdk/ps5-opengl-sdk-1.0.2/sdk}
 sdl2=${PS5_SDL2_PREFIX:-$HOME/ps5-opengl/build/sdl-native/sdk}
+pacbrew=${PS5_PACBREW_PREFIX:-$template/.deps/pacbrew/v0.40.2/sysroot/user/homebrew}
 title_id=${TITLE_ID:-PPSA92041}
 title_name=${TITLE_NAME:-Dungeon Crawl Stone Soup}
 content_version=${CONTENT_VERSION:-01.000.000}
-arch=x86_64-sie-ps5
-contrib="$source_dir/contrib/install/$arch"
 out="$source_dir/build-ps5/app"
 
 die() { echo "package-native: $*" >&2; exit 1; }
@@ -40,7 +41,7 @@ die() { echo "package-native: $*" >&2; exit 1; }
     die "bad CONTENT_VERSION: $content_version"
 for path in "$template/tools/build.sh" "$template/.deps/native/ps5-payload-sdk" \
             "$opengl_repo/native-app/runtime_shims.c" \
-            "$opengl/lib/libPS5OpenGLCore33.a" "$sdl2/lib/libSDL2.a" \
+            "$opengl/lib/libPS5OpenGLCore33.a" "$sdl2/lib/libSDL2.a" "$pacbrew/lib" \
             "$source_dir/crawl-native.objs"; do
     [[ -e $path ]] || die "missing $path"
 done
@@ -91,19 +92,6 @@ replace_once "$out/tools/build.sh" \
     '--eh-frame-hdr \' \
     '--eh-frame-hdr --wrap=malloc --wrap=calloc --wrap=realloc --wrap=free --wrap=posix_memalign --wrap=malloc_usable_size --wrap=fopen \'
 
-# SDL2_image with only the loaders Crawl uses (PNG, BMP). IMG.c references
-# every format, so the others are built too, as "unsupported" stubs.
-image_src="$source_dir/contrib/sdl2-image"
-image_obj="$out/build/sdl2-image"
-mkdir -p "$image_obj"
-for file in IMG.c IMG_bmp.c IMG_gif.c IMG_jpg.c IMG_lbm.c IMG_pcx.c IMG_png.c \
-            IMG_pnm.c IMG_tga.c IMG_tif.c IMG_webp.c IMG_xcf.c IMG_xpm.c IMG_xv.c; do
-    "${compiler[@]}" -O2 -fPIC -ffunction-sections -fdata-sections -D__PROSPERO__ \
-        -DLOAD_PNG -DLOAD_BMP -I"$sdl2/include/SDL2" -I"$contrib/include" \
-        -c "$image_src/$file" -o "$image_obj/${file%.c}.o"
-done
-llvm-ar-18 rcs "$out/vendor/libSDL2_image.a" "$image_obj"/*.o
-
 # contrib/pcre archives only the objects newer than the old archive ($?), so
 # with clock skew (e.g. WSL) its libpcre.a can miss most of the library.
 # Archive all of its objects here instead.
@@ -111,9 +99,13 @@ llvm-ar-18 rcs "$out/vendor/libpcre.a" "$source_dir"/contrib/pcre/pcre_*.o
 
 # The link: every game object, then the libraries in one group.
 compiler_rt="$(clang-18 --print-resource-dir)/lib/linux/libclang_rt.builtins-x86_64.a"
-libraries=("$out/vendor/libSDL2_image.a"
-           "$contrib/lib/libfreetype.a" "$contrib/lib/libpng.a" "$contrib/lib/libz.a"
-           "$contrib/lib/liblua.a" "$contrib/lib/libsqlite3.a" "$out/vendor/libpcre.a"
+# PacBrew's PS5 builds: SDL2_image (with the WebP it was built with),
+# freetype (with bzip2), libpng, zlib, Lua and SQLite. SDL2 is ps5-opengl's.
+libraries=("$pacbrew/lib/libSDL2_image.a" "$pacbrew/lib/libwebpdemux.a"
+           "$pacbrew/lib/libwebp.a" "$pacbrew/lib/libsharpyuv.a"
+           "$pacbrew/lib/libfreetype.a" "$pacbrew/lib/libbz2.a"
+           "$pacbrew/lib/libpng16.a" "$pacbrew/lib/libz.a"
+           "$pacbrew/lib/liblua.a" "$pacbrew/lib/libsqlite3.a" "$out/vendor/libpcre.a"
            "$sdl2/lib/libSDL2.a" "$opengl/lib/libPS5OpenGLCore33.a"
            "$sdk/target/lib/libunwind.a" "$sdk/target/lib/libc++abi.a"
            "$sdk/target/lib/libc++.a" "$compiler_rt")

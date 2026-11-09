@@ -51,6 +51,7 @@ jobs:
             curl \
             git \
             libarchive-tools \
+            libpng-dev \
             libtool \
             lld-18 \
             makepkg \

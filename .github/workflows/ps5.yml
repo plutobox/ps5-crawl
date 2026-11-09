@@ -82,8 +82,9 @@ jobs:
           makepkg -c -f
           sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
 
-      - name: Build PS5 lua package
-        working-directory: pacbrew-repo/lua
+      - name: Build PS5 luajit package
+        working-directory: pacbrew-repo/luajit
+
         run: |
           makepkg -c -f
           sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz

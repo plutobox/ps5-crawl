@@ -15,14 +15,13 @@ concurrency:
 
 permissions:
   contents: read
-
 jobs:
-  build:
-    outputs:
-      archive_name: ${{ steps.package.outputs.archive_name }}
+  # The ELF payload (PS5=y), for loaders such as elfldr. Not a catalog
+  # artifact: the homebrew catalog lists native titles only.
+  payload:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Payload
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -67,38 +66,133 @@ jobs:
         run: |
           make -j4 PS5=y install DESTDIR="$RUNNER_TEMP/stage"
           echo "CRAWL_VERSION=$(git describe)" >> "$GITHUB_ENV"
-          ls -a "$RUNNER_TEMP/stage"
 
-      # - name: Package
-      #   run: |
-      #     mkdir -p dist
-      #     cp "$RUNNER_TEMP/stage/data/crawl/bin/crawl" dist/crawl-ps5.elf
-      #     (cd "$RUNNER_TEMP/stage" && zip -qr "$GITHUB_WORKSPACE/dist/crawl-ps5.zip" .)
-      #     (cd dist && sha256sum crawl-ps5.elf crawl-ps5.zip | tee SHA256SUMS)
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp "$RUNNER_TEMP/stage/data/crawl/bin/crawl" dist/crawl-ps5.elf
+          (cd "$RUNNER_TEMP/stage" && zip -qr "$GITHUB_WORKSPACE/dist/crawl-ps5-payload.zip" .)
+          (cd dist && sha256sum crawl-ps5.elf crawl-ps5-payload.zip | tee SHA256SUMS)
 
-      # - name: Attest build provenance
-      #   if: github.event_name != 'pull_request'
-      #   uses: actions/attest-build-provenance@v4
-      #   with:
-      #     subject-path: |
-      #       dist/crawl-ps5.elf
-      #       dist/crawl-ps5.zip
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: crawl-ps5-payload-${{ env.CRAWL_VERSION }}
+          path: dist/
 
-      # - name: Upload artifact
-      #   uses: actions/upload-artifact@v7
-      #   with:
-      #     name: crawl-ps5-${{ env.CRAWL_VERSION }}
-      #     path: dist/
+  # The native title (PS5_NATIVE=y): <TITLEID>.zip with eboot.bin, sce_sys/
+  # and assets/, the file the homebrew catalog installs. Built with the same
+  # pinned toolchain as ps5/package-native.sh expects in $HOME.
+  native:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # to publish the release on a version tag
+    env:
+      BOILERPLATE_REV: 4f531c4b517f80bcb6b1267135848168d2250047
+      PS5_OPENGL_REV: 6b6bb2039f741287ed7f1bc6bc4b2c589709a0ba
+      PS5_OPENGL_SDK_VERSION: 1.0.2
+      SDL_REV: 8c56053f13ca13a0c050de613706ff69eb615836
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # - name: Publish release
-      #   if: startsWith(github.ref, 'refs/tags/ps5-')
-      #   env:
-      #     GH_TOKEN: ${{ github.token }}
-      #   run: |
-      #     gh release create "$GITHUB_REF_NAME" \
-      #       dist/crawl-ps5.zip dist/crawl-ps5.elf dist/SHA256SUMS \
-      #       --prerelease \
-      #       --title "Crawl for PS5 $GITHUB_REF_NAME" \
-      #       --notes "Dungeon Crawl Stone Soup $CRAWL_VERSION built for PS5 homebrew.
+      - name: Checkout contrib submodules
+        # The native title links its own builds of these with the title's
+        # compiler (see the PS5_NATIVE settings in the Makefile).
+        run: |
+          git submodule update --init --depth 1 \
+            crawl-ref/source/contrib/fonts \
+            crawl-ref/source/contrib/freetype \
+            crawl-ref/source/contrib/libpng \
+            crawl-ref/source/contrib/lua \
+            crawl-ref/source/contrib/pcre \
+            crawl-ref/source/contrib/sdl2-image \
+            crawl-ref/source/contrib/sqlite \
+            crawl-ref/source/contrib/zlib
 
-      #     Provenance: \`gh attestation verify crawl-ps5.zip --repo $GITHUB_REPOSITORY\`"
+      - name: Setup build environment
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            build-essential ccache clang-18 cmake curl git libclang-rt-18-dev \
+            libpng-dev lld-18 llvm-18 ninja-build perl pkg-config python3 \
+            python3-yaml tar unzip wget zip
+
+      - name: Read title metadata
+        # sce_sys/param.json is the committed copy the catalog reads; the
+        # build uses the same title ID and content version.
+        run: |
+          python3 - >> "$GITHUB_ENV" <<'PY'
+          import json
+          param = json.load(open("sce_sys/param.json"))
+          print(f"TITLE_ID={param['titleId']}")
+          print(f"CONTENT_VERSION={param['contentVersion']}")
+          PY
+
+      - name: Fetch native toolchain
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git clone -q https://github.com/drakmor/ps5-native-app-boilerplate "$HOME/ps5-native-app-boilerplate"
+          git -C "$HOME/ps5-native-app-boilerplate" checkout -q "$BOILERPLATE_REV"
+          bash "$HOME/ps5-native-app-boilerplate/tools/setup-native-dependencies.sh"
+
+          git clone -q https://github.com/darkxex/ps5-opengl "$HOME/ps5-opengl"
+          git -C "$HOME/ps5-opengl" checkout -q "$PS5_OPENGL_REV"
+
+          mkdir -p "$HOME/ps5-opengl-sdk"
+          gh release download "v$PS5_OPENGL_SDK_VERSION" --repo darkxex/ps5-opengl \
+            --pattern "ps5-opengl-sdk-$PS5_OPENGL_SDK_VERSION.tar.gz" --dir "$RUNNER_TEMP"
+          tar -xzf "$RUNNER_TEMP/ps5-opengl-sdk-$PS5_OPENGL_SDK_VERSION.tar.gz" -C "$HOME/ps5-opengl-sdk"
+
+          git clone -q https://github.com/ps5-payload-dev/SDL "$RUNNER_TEMP/SDL"
+          git -C "$RUNNER_TEMP/SDL" checkout -q "$SDL_REV"
+
+      - name: Build SDL2 for the native title
+        working-directory: /home/runner/ps5-opengl
+        run: |
+          python3 integration/SDL2/build.py native \
+            --sdl-source "$RUNNER_TEMP/SDL" \
+            --sdk-prefix "$HOME/ps5-opengl-sdk/ps5-opengl-sdk-$PS5_OPENGL_SDK_VERSION/sdk" \
+            --out build/sdl-native \
+            --payload-sdk "$HOME/ps5-native-app-boilerplate/.deps/native/ps5-payload-sdk" \
+            --compiler-wrapper "$HOME/ps5-native-app-boilerplate/tooling/prospero-clang18"
+
+      - name: Build and package the title
+        working-directory: crawl-ref/source
+        run: |
+          make -j"$(nproc)" PS5_NATIVE=y crawl-native.objs
+          bash ps5/package-native.sh --build
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          cp "build-ps5/app/dist/$TITLE_ID.zip" "$GITHUB_WORKSPACE/dist/"
+          (cd "$GITHUB_WORKSPACE/dist" && sha256sum "$TITLE_ID.zip" | tee SHA256SUMS)
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.TITLE_ID }}-${{ env.CONTENT_VERSION }}
+          path: dist/
+
+      - name: Publish release
+        # On a version tag (the content version, e.g. 01.000.001), publish a
+        # pre-release with the title zip as its only asset, as the catalog
+        # requires. An existing release is never changed: a listed asset's
+        # sha256 must not change.
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ "$GITHUB_REF_NAME" == "$CONTENT_VERSION" ]] || {
+            echo "::error::tag $GITHUB_REF_NAME does not match contentVersion $CONTENT_VERSION in sce_sys/param.json"
+            exit 1
+          }
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "::notice::release $GITHUB_REF_NAME already exists; leaving it unchanged"
+            exit 0
+          fi
+          gh release create "$GITHUB_REF_NAME" "dist/$TITLE_ID.zip" \
+            --verify-tag --prerelease \
+            --title "Dungeon Crawl Stone Soup for PS5 $GITHUB_REF_NAME" \
+            --notes "Dungeon Crawl Stone Soup, built as a native PS5 title ($TITLE_ID)."

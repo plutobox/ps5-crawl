@@ -1064,7 +1064,9 @@ int _pad_button_key(Uint8 button)
         // In a menu or popup, Square opens the on-screen keyboard for its
         // text field (the name and seed entries); screens without one
         // ignore the key.
-        if (mode == pad_mode::menu)
+        // Also at a prompt, in targeting and on the map (pad_mode::other):
+        // a key the buttons don't have is typed there (see getch_ck).
+        if (mode != pad_mode::command)
             return CK_PS5_TYPE;
 #endif
         return cmd ? 'z' : 0;

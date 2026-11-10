@@ -790,6 +790,21 @@ int TilesFramework::getch_ck()
     // We got some input, so we'll probably have to redraw something.
     set_need_redraw();
 
+#ifdef USE_PS5_NATIVE
+    // Square at a prompt that wants a letter (swap which item, adjust, the
+    // map's < and >, ...): ask for it on the on-screen keyboard.
+    if (key == CK_PS5_TYPE)
+    {
+        char typed[8];
+        if (ps5_text_input("Type a key", "", typed, sizeof typed) == 1
+            && typed[0])
+        {
+            return static_cast<unsigned char>(typed[0]);
+        }
+        return CK_REDRAW;
+    }
+#endif
+
     return key;
 }
 

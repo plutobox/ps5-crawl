@@ -30,7 +30,7 @@ waiting for.
 | D-pad / left stick | Move in 8 directions (hold to repeat) | Move the cursor | Move the cursor |
 | ✕ Cross | Take the stairs, pick up what's here, or wait a turn | Confirm (Enter); in a list of items, take the highlighted one | Confirm |
 | ○ Circle | Cancel (Esc) | Cancel | Cancel |
-| □ Square | Cast a spell (`z`) | Tick an entry, in a menu that takes several; type in a text field (name, seed) | |
+| □ Square | Cast a spell (`z`) | Tick an entry, in a menu that takes several; type in a text field (name, seed) | Type a key on the on-screen keyboard, for prompts that want a letter (also on the map and at questions) |
 | △ Triangle | Inventory (`i`); on an item's screen, D-pad left and right choose an action (wield, drop...) and ✕ Cross does it | | |
 | L1 | Wait a turn (`s`) when tapped; hold it for the world layer | Previous page | |
 | R1 | Fire (`f`) when tapped; hold it for the item layer | Next page | Fire at the target |

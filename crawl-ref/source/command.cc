@@ -744,6 +744,8 @@ static void _add_formatted_pad_help(column_composer &cols)
         "<w>L2, R2</w>         : previous, next target\n"
         "<w>Cross, R1</w>      : fire, confirm\n"
         "<w>Circle</w>         : cancel\n"
+        "<w>Square</w>         : type a key, if a prompt\n"
+        "                  wants one (keyboard)\n"
         "\n"
         "<h>This help\n"
         "\n"

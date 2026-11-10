@@ -104,6 +104,95 @@
 using namespace ui;
 
 static command_type _get_action(int key, vector<command_type> actions);
+
+#ifdef USE_PS5_NATIVE
+// Choosing among the actions of a description screen ((w)ield, (d)rop...)
+// with the controller, which has no letters: D-pad left and right move along
+// them and Cross does the chosen one. Until one is chosen, Cross closes the
+// screen as it always did.
+struct pad_action_chooser
+{
+    vector<command_type> actions;
+    int chosen = -1;
+    shared_ptr<Text> footer;
+
+    static string name(command_type cmd)
+    {
+        switch (cmd)
+        {
+        case CMD_WIELD_WEAPON:      return "Wield";
+        case CMD_UNWIELD_WEAPON:    return "Unwield";
+        case CMD_QUIVER_ITEM:       return "Quiver";
+        case CMD_WEAR_ARMOUR:       return "Wear";
+        case CMD_REMOVE_ARMOUR:     return "Take off";
+        case CMD_EVOKE:             return "Evoke";
+        case CMD_READ:              return "Read";
+        case CMD_WEAR_JEWELLERY:    return "Put on";
+        case CMD_REMOVE_JEWELLERY:  return "Remove";
+        case CMD_QUAFF:             return "Drink";
+        case CMD_PICKUP:            return "Pick up";
+        case CMD_DROP:              return "Drop";
+        case CMD_INSCRIBE_ITEM:     return "Inscribe";
+        case CMD_ADJUST_INVENTORY:  return "Change letter";
+        case CMD_SET_SKILL_TARGET:  return "Skill target";
+        case CMD_MAP_GOTO_TARGET:   return "Go to location";
+        case CMD_GO_UPSTAIRS:       return "Go up";
+        case CMD_GO_DOWNSTAIRS:     return "Go down";
+        case CMD_MAP_PREV_LEVEL:    return "Previous level";
+        case CMD_MAP_NEXT_LEVEL:    return "Next level";
+        case CMD_OPEN_DOOR:         return "Open";
+        case CMD_CLOSE_DOOR:        return "Close";
+        default:                    return command_to_name(cmd);
+        }
+    }
+
+    void show() const
+    {
+        string line;
+        for (int i = 0; i < (int) actions.size(); i++)
+        {
+            if (i)
+                line += "   ";
+            line += i == chosen ? "<white>[" + name(actions[i]) + "]</white>"
+                                : name(actions[i]);
+        }
+        line += "\n<darkgrey>D-pad left, right: choose. Cross: do it. "
+                "Circle: close.</darkgrey>";
+        footer->set_text(formatted_string::parse_string(line));
+    }
+
+    void init(const vector<command_type> &acts, shared_ptr<Text> foot)
+    {
+        actions = acts;
+        footer = std::move(foot);
+        show();
+    }
+
+    // True if the key was ours; `action` and `done` are set when the chosen
+    // action is to be done.
+    bool handle(int key, command_type &action, bool &done)
+    {
+        if (actions.empty() || !footer)
+            return false;
+        const int count = actions.size();
+        if (key == CK_LEFT || key == CK_RIGHT)
+        {
+            const int step = key == CK_RIGHT ? 1 : -1;
+            chosen = chosen < 0 ? (step > 0 ? 0 : count - 1)
+                                : (chosen + count + step) % count;
+            show();
+            return true;
+        }
+        if (key == CK_ENTER && chosen >= 0)
+        {
+            action = actions[chosen];
+            done = true;
+            return true;
+        }
+        return false;
+    }
+};
+#endif
 static void _print_bar(int value, int scale, const string &name,
                        ostringstream &result, int base_value = INT_MAX);
 
@@ -3945,6 +4034,9 @@ bool describe_feature_wide(const coord_def& pos, bool do_actions)
     vector<command_type> actions;
     if (do_actions)
         actions = _allowed_feat_actions(pos);
+#ifdef USE_PS5_NATIVE
+    pad_action_chooser pad_chooser;
+#endif
     formatted_string footer_text("", CYAN);
     if (!actions.empty())
     {
@@ -3954,6 +4046,9 @@ bool describe_feature_wide(const coord_def& pos, bool do_actions)
         footer->set_text(footer_text);
         footer->set_margin_for_crt(1, 0, 0, 0);
         footer->set_margin_for_sdl(20, 0, 0, 0);
+#ifdef USE_PS5_NATIVE
+        pad_chooser.init(actions, footer);
+#endif
         vbox->add_child(std::move(footer));
     }
 
@@ -3970,6 +4065,10 @@ bool describe_feature_wide(const coord_def& pos, bool do_actions)
     // use on_hotkey_event, not on_event, to preempt the scroller key handling
     popup->on_hotkey_event([&](const KeyEvent& ev) {
         int lastch = ev.key();
+#ifdef USE_PS5_NATIVE
+        if (pad_chooser.handle(lastch, action, done))
+            return true;
+#endif
         action = _get_action(lastch, actions);
         done = action != CMD_NO_CMD || ui::key_exits_popup(lastch, true);
         return true;
@@ -4429,6 +4528,9 @@ command_type describe_item_popup(const item_def &item,
     scroller->set_child(text);
     vbox->add_child(scroller);
 
+#ifdef USE_PS5_NATIVE
+    pad_action_chooser pad_chooser;
+#endif
     formatted_string footer_text("", CYAN);
     if (!actions.empty())
     {
@@ -4439,6 +4541,9 @@ command_type describe_item_popup(const item_def &item,
         footer->set_text(footer_text);
         footer->set_margin_for_crt(1, 0, 0, 0);
         footer->set_margin_for_sdl(20, 0, 0, 0);
+#ifdef USE_PS5_NATIVE
+        pad_chooser.init(actions, footer);
+#endif
         vbox->add_child(std::move(footer));
     }
 
@@ -4455,6 +4560,10 @@ command_type describe_item_popup(const item_def &item,
     popup->on_keydown_event([&](const KeyEvent& ev) {
         const auto key = ev.key() == '{' ? 'i' : ev.key();
         lastch = key;
+#ifdef USE_PS5_NATIVE
+        if (pad_chooser.handle(key, action, done))
+            return true;
+#endif
         action = _get_action(key, actions);
         if (action != CMD_NO_CMD || ui::key_exits_popup(key, true))
             done = true;

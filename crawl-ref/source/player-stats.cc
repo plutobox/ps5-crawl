@@ -11,6 +11,7 @@
 #include "hints.h"
 #include "libutil.h"
 #include "macro.h"
+#include "menu.h"
 #include "message.h"
 #include "monster.h"
 #include "notes.h"
@@ -111,6 +112,21 @@ bool attribute_increase()
             clua.fnreturns(">s", &result);
             keyin = toupper_safe(result[0]);
         }
+#ifdef USE_PS5_NATIVE
+        else
+        {
+            // There is no S, I or D on a controller: pick from a menu.
+            Menu menu(MF_SINGLESELECT | MF_ARROWS_SELECT | MF_INIT_HOVER
+                      | MF_WRAP | MF_ALLOW_FORMATTING);
+            menu.set_title(new MenuEntry("<w>Increase which attribute?</w>",
+                                         MEL_TITLE));
+            menu.add_entry(new MenuEntry("Strength", MEL_ITEM, 1, 'S'));
+            menu.add_entry(new MenuEntry("Intelligence", MEL_ITEM, 1, 'I'));
+            menu.add_entry(new MenuEntry("Dexterity", MEL_ITEM, 1, 'D'));
+            const vector<MenuEntry *> chosen = menu.show();
+            keyin = chosen.empty() ? CK_ESCAPE : chosen[0]->hotkeys[0];
+        }
+#else
         else
         {
             while ((keyin = getchm()) == CK_REDRAW)
@@ -119,6 +135,7 @@ bool attribute_increase()
                 update_screen();
             }
         }
+#endif
         tried_lua = true;
 
         if (!need_caps)

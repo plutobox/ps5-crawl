@@ -1132,38 +1132,65 @@ struct pad_chord
     int modifier;       // 1: R1, 2: R2, 3: L1
     Uint8 button;
     command_type cmd;
+    const char *label;  // short, for the box shown while the layer is held
 };
+
+#define PAD_UP    SDL_CONTROLLER_BUTTON_DPAD_UP
+#define PAD_DOWN  SDL_CONTROLLER_BUTTON_DPAD_DOWN
+#define PAD_LEFT  SDL_CONTROLLER_BUTTON_DPAD_LEFT
+#define PAD_RIGHT SDL_CONTROLLER_BUTTON_DPAD_RIGHT
 
 static const pad_chord PAD_CHORDS[] =
 {
     // R1: items
-    { 1, SDL_CONTROLLER_BUTTON_A,         CMD_QUAFF },
-    { 1, SDL_CONTROLLER_BUTTON_X,         CMD_READ },
-    { 1, SDL_CONTROLLER_BUTTON_Y,         CMD_EQUIP },
-    { 1, SDL_CONTROLLER_BUTTON_B,         CMD_UNEQUIP },
-    { 1, SDL_CONTROLLER_BUTTON_DPAD_UP,   CMD_EVOKE },
-    { 1, SDL_CONTROLLER_BUTTON_DPAD_DOWN, CMD_DROP },
-    { 1, SDL_CONTROLLER_BUTTON_DPAD_LEFT, CMD_WEAPON_SWAP },
-    { 1, SDL_CONTROLLER_BUTTON_DPAD_RIGHT, CMD_QUIVER_ITEM },
+    { 1, SDL_CONTROLLER_BUTTON_A, CMD_QUAFF,        "drink" },
+    { 1, SDL_CONTROLLER_BUTTON_X, CMD_READ,         "read" },
+    { 1, SDL_CONTROLLER_BUTTON_Y, CMD_EQUIP,        "wield, wear" },
+    { 1, SDL_CONTROLLER_BUTTON_B, CMD_UNEQUIP,      "take off" },
+    { 1, PAD_UP,    CMD_EVOKE,        "evoke" },
+    { 1, PAD_DOWN,  CMD_DROP,         "drop" },
+    { 1, PAD_LEFT,  CMD_WEAPON_SWAP,  "swap weapon" },
+    { 1, PAD_RIGHT, CMD_QUIVER_ITEM,  "ammo" },
     // L1: the world
-    { 3, SDL_CONTROLLER_BUTTON_A,         CMD_CLOSE_DOOR },
-    { 3, SDL_CONTROLLER_BUTTON_X,         CMD_SHOUT },
-    { 3, SDL_CONTROLLER_BUTTON_Y,         CMD_SEARCH_STASHES },
-    { 3, SDL_CONTROLLER_BUTTON_B,         CMD_OPEN_DOOR },
-    { 3, SDL_CONTROLLER_BUTTON_DPAD_UP,   CMD_DISPLAY_CHARACTER_STATUS },
-    { 3, SDL_CONTROLLER_BUTTON_DPAD_DOWN, CMD_DISPLAY_KNOWN_OBJECTS },
-    { 3, SDL_CONTROLLER_BUTTON_DPAD_LEFT, CMD_DISPLAY_MUTATIONS },
-    { 3, SDL_CONTROLLER_BUTTON_DPAD_RIGHT, CMD_DISPLAY_RUNES },
+    { 3, SDL_CONTROLLER_BUTTON_A, CMD_CLOSE_DOOR,   "close door" },
+    { 3, SDL_CONTROLLER_BUTTON_X, CMD_SHOUT,        "shout" },
+    { 3, SDL_CONTROLLER_BUTTON_Y, CMD_SEARCH_STASHES, "find items" },
+    { 3, SDL_CONTROLLER_BUTTON_B, CMD_OPEN_DOOR,    "open door" },
+    { 3, PAD_UP,    CMD_DISPLAY_CHARACTER_STATUS, "status" },
+    { 3, PAD_DOWN,  CMD_DISPLAY_KNOWN_OBJECTS,    "known items" },
+    { 3, PAD_LEFT,  CMD_DISPLAY_MUTATIONS,        "mutations" },
+    { 3, PAD_RIGHT, CMD_DISPLAY_RUNES,            "runes" },
     // R2: knowing and planning
-    { 2, SDL_CONTROLLER_BUTTON_A,         CMD_INTERLEVEL_TRAVEL },
-    { 2, SDL_CONTROLLER_BUTTON_X,         CMD_MEMORISE_SPELL },
-    { 2, SDL_CONTROLLER_BUTTON_Y,         CMD_DISPLAY_SKILLS },
-    { 2, SDL_CONTROLLER_BUTTON_B,         CMD_REPLAY_MESSAGES },
-    { 2, SDL_CONTROLLER_BUTTON_DPAD_UP,   CMD_RESISTS_SCREEN },
-    { 2, SDL_CONTROLLER_BUTTON_DPAD_DOWN, CMD_DISPLAY_OVERMAP },
-    { 2, SDL_CONTROLLER_BUTTON_DPAD_LEFT, CMD_DISPLAY_RELIGION },
-    { 2, SDL_CONTROLLER_BUTTON_DPAD_RIGHT, CMD_DISPLAY_SPELLS },
+    { 2, SDL_CONTROLLER_BUTTON_A, CMD_INTERLEVEL_TRAVEL, "travel" },
+    { 2, SDL_CONTROLLER_BUTTON_X, CMD_MEMORISE_SPELL,    "memorise" },
+    { 2, SDL_CONTROLLER_BUTTON_Y, CMD_DISPLAY_SKILLS,    "skills" },
+    { 2, SDL_CONTROLLER_BUTTON_B, CMD_REPLAY_MESSAGES,   "messages" },
+    { 2, PAD_UP,    CMD_RESISTS_SCREEN,   "character" },
+    { 2, PAD_DOWN,  CMD_DISPLAY_OVERMAP,  "dungeon" },
+    { 2, PAD_LEFT,  CMD_DISPLAY_RELIGION, "religion" },
+    { 2, PAD_RIGHT, CMD_DISPLAY_SPELLS,   "spells" },
 };
+
+static const char *_pad_button_name(Uint8 button)
+{
+    switch (button)
+    {
+    case SDL_CONTROLLER_BUTTON_A:          return "Cross";
+    case SDL_CONTROLLER_BUTTON_B:          return "Circle";
+    case SDL_CONTROLLER_BUTTON_X:          return "Square";
+    case SDL_CONTROLLER_BUTTON_Y:          return "Triangle";
+    case SDL_CONTROLLER_BUTTON_DPAD_UP:    return "D-pad up";
+    case SDL_CONTROLLER_BUTTON_DPAD_DOWN:  return "D-pad down";
+    case SDL_CONTROLLER_BUTTON_DPAD_LEFT:  return "D-pad left";
+    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return "D-pad right";
+    default:                               return "";
+    }
+}
+
+static const char *_pad_modifier_name(int modifier)
+{
+    return modifier == 1 ? "R1" : modifier == 2 ? "R2" : "L1";
+}
 
 static command_type _pad_chord_command(int modifier, Uint8 button)
 {
@@ -1177,25 +1204,9 @@ static command_type _pad_chord_command(int modifier, Uint8 button)
 string ps5_pad_chord_for_command(int cmd)
 {
     for (const pad_chord &chord : PAD_CHORDS)
-    {
-        if (chord.cmd != cmd)
-            continue;
-        const char *button = "";
-        switch (chord.button)
-        {
-        case SDL_CONTROLLER_BUTTON_A:          button = "Cross"; break;
-        case SDL_CONTROLLER_BUTTON_B:          button = "Circle"; break;
-        case SDL_CONTROLLER_BUTTON_X:          button = "Square"; break;
-        case SDL_CONTROLLER_BUTTON_Y:          button = "Triangle"; break;
-        case SDL_CONTROLLER_BUTTON_DPAD_UP:    button = "D-pad up"; break;
-        case SDL_CONTROLLER_BUTTON_DPAD_DOWN:  button = "D-pad down"; break;
-        case SDL_CONTROLLER_BUTTON_DPAD_LEFT:  button = "D-pad left"; break;
-        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: button = "D-pad right"; break;
-        default: break;
-        }
-        return string(chord.modifier == 1 ? "R1"
-                      : chord.modifier == 2 ? "R2" : "L1") + "+" + button;
-    }
+        if (chord.cmd == cmd)
+            return string(_pad_modifier_name(chord.modifier)) + "+"
+                   + _pad_button_name(chord.button);
     return "";
 }
 
@@ -1293,6 +1304,13 @@ int _pad_repeat_due(wm_event *event)
         return 0;
     pad_repeat_next = SDL_GetTicks() + PAD_REPEAT_RATE_MS;
     return _pad_key_event(event, pad_repeat_key);
+}
+
+// Ask the game to redraw, so the box for a held layer shows or goes away.
+int _pad_redraw_event(wm_event *event)
+{
+    event->type = WME_EXPOSE;
+    return 1;
 }
 
 // Fill in a key press. Returns 1 if there is one to deliver.
@@ -1457,7 +1475,7 @@ static int _handle_controller_event(const SDL_Event &sdlevent, wm_event *event)
                 (pressed == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER
                     ? pad_r1_pending : pad_l1_pending) = true;
                 pad_modifier_used = false;
-                return 0;
+                return _pad_redraw_event(event); // show the layer's box
             }
             const int modifier = pad_r1_pending ? 1 : pad_r2_pending ? 2
                                : pad_l1_pending ? 3 : 0;
@@ -1489,13 +1507,15 @@ static int _handle_controller_event(const SDL_Event &sdlevent, wm_event *event)
         {
             pad_r1_pending = false;
             // Released alone: it was a tap.
-            return pad_modifier_used ? 0 : _pad_key_event(event, 'f');
+            return pad_modifier_used ? _pad_redraw_event(event)
+                                     : _pad_key_event(event, 'f');
         }
         if (sdlevent.cbutton.button == SDL_CONTROLLER_BUTTON_LEFTSHOULDER
             && pad_l1_pending)
         {
             pad_l1_pending = false;
-            return pad_modifier_used ? 0 : _pad_key_event(event, 's');
+            return pad_modifier_used ? _pad_redraw_event(event)
+                                     : _pad_key_event(event, 's');
         }
 #endif
         if (sdlevent.cbutton.button == pad_dpad_button)
@@ -1535,12 +1555,12 @@ static int _handle_controller_event(const SDL_Event &sdlevent, wm_event *event)
                 {
                     pad_r2_pending = true;
                     pad_modifier_used = false;
-                    return 0;
+                    return _pad_redraw_event(event);
                 }
                 if (!held && pad_r2_pending)
                 {
                     pad_r2_pending = false;
-                    return pad_modifier_used ? 0
+                    return pad_modifier_used ? _pad_redraw_event(event)
                                              : _pad_key_event(event, CK_TAB);
                 }
             }
@@ -2009,3 +2029,34 @@ void SDLWrapper::glDebug(const char* msg)
 }
 #endif // USE_SDL
 #endif // USE_TILE_LOCAL
+
+#ifdef USE_PS5_NATIVE
+// The box shown at the top while R1, R2 or L1 is held: what each button does.
+// Empty when none is held.
+string ps5_pad_layer_text()
+{
+    const int modifier = pad_r1_pending ? 1 : pad_r2_pending ? 2
+                       : pad_l1_pending ? 3 : 0;
+    if (!modifier)
+        return "";
+    const char *title = modifier == 1 ? "items"
+                      : modifier == 2 ? "know and plan" : "the world";
+    string face, pad;
+    for (const pad_chord &chord : PAD_CHORDS)
+    {
+        if (chord.modifier != modifier)
+            continue;
+        const bool dpad = chord.button >= SDL_CONTROLLER_BUTTON_DPAD_UP;
+        string &line = dpad ? pad : face;
+        string name = _pad_button_name(chord.button);
+        if (dpad)
+            name = name.substr(strlen("D-pad "));
+        if (!line.empty())
+            line += "   ";
+        line += "<w>" + name + "</w> " + chord.label;
+    }
+    return string("<yellow>Hold ") + _pad_modifier_name(modifier) + ": "
+           + title + "</yellow>\n" + face + "\n<darkgrey>D-pad</darkgrey> "
+           + pad;
+}
+#endif

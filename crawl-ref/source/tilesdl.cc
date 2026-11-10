@@ -1358,6 +1358,19 @@ void TilesFramework::redraw()
         m_tip_font->render_tooltip(m_mouse.x, m_mouse.y,
                 formatted_string(m_tooltip), min_pos, max_pos);
     }
+#ifdef USE_PS5_NATIVE
+    // While R1, R2 or L1 is held: a box at the top saying what the buttons do.
+    const string layer = ps5_pad_layer_text();
+    if (!layer.empty())
+    {
+        const formatted_string text = formatted_string::parse_string(layer);
+        const int width = m_tip_font->string_width(text);
+        // render_tooltip puts the text at (x - 15, y + 20): just under the top.
+        m_tip_font->render_tooltip((m_windowsz.x - width) / 2 + 15,
+                                   0, text,
+                                   coord_def(), m_windowsz);
+    }
+#endif
     wm->swap_buffers();
 
     m_last_tick_redraw = wm->get_ticks();

@@ -30,6 +30,7 @@
 #endif
 
 #include "cio.h"
+#include "command.h"
 #include "env.h"
 #include "files.h"
 #include "glwrapper.h"
@@ -1010,6 +1011,11 @@ int pad_dpad_key = 0;     // direction held on the d-pad, or 0
 int pad_dpad_button = -1; // the d-pad button producing pad_dpad_key
 int pad_stick_key = 0;    // direction held on the left stick, or 0
 bool pad_trigger_held[2] = { false, false };
+// R1 and R2 held in the dungeon, waiting to see whether another button joins
+// them (a chord) or they are released alone (a tap: fire, attack).
+bool pad_r1_pending = false;
+bool pad_r2_pending = false;
+bool pad_modifier_used = false;
 
 pad_mode _pad_mode()
 {
@@ -1061,7 +1067,8 @@ int _pad_button_key(Uint8 button)
     case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
         return cmd ? 's' : mode == pad_mode::menu ? CK_PGUP : 0;
     case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
-        // In targeting, 'f' fires at the target.
+        // In targeting, 'f' fires at the target. (In the dungeon the PS5
+        // build sends it on release, as R1 is a modifier there.)
         return cmd ? 'f' : mode == pad_mode::menu ? int{CK_PGDN} : 'f';
     case SDL_CONTROLLER_BUTTON_LEFTSTICK:
         return cmd ? 'x' : 0;
@@ -1110,6 +1117,78 @@ string ps5_pad_button_for_key(int key)
 namespace
 {
 #endif
+
+} // namespace
+
+// Holding R1 or R2 changes what the other buttons do. R1 is the hands (the
+// items), R2 is the head (knowing, planning). Each layer uses the same
+// positions for the same kind of thing: Cross the commonest, Square the second,
+// Triangle and Circle a pair of opposites where there is one.
+// Pressing R1 or R2 alone still fires or attacks (on release).
+struct pad_chord
+{
+    int modifier;       // 1: R1, 2: R2
+    Uint8 button;
+    command_type cmd;
+};
+
+static const pad_chord PAD_CHORDS[] =
+{
+    // R1: items
+    { 1, SDL_CONTROLLER_BUTTON_A,         CMD_QUAFF },
+    { 1, SDL_CONTROLLER_BUTTON_X,         CMD_READ },
+    { 1, SDL_CONTROLLER_BUTTON_Y,         CMD_EQUIP },
+    { 1, SDL_CONTROLLER_BUTTON_B,         CMD_UNEQUIP },
+    { 1, SDL_CONTROLLER_BUTTON_DPAD_UP,   CMD_EVOKE },
+    { 1, SDL_CONTROLLER_BUTTON_DPAD_DOWN, CMD_DROP },
+    { 1, SDL_CONTROLLER_BUTTON_DPAD_LEFT, CMD_WEAPON_SWAP },
+    { 1, SDL_CONTROLLER_BUTTON_DPAD_RIGHT, CMD_QUIVER_ITEM },
+    // R2: knowing and planning
+    { 2, SDL_CONTROLLER_BUTTON_A,         CMD_INTERLEVEL_TRAVEL },
+    { 2, SDL_CONTROLLER_BUTTON_X,         CMD_MEMORISE_SPELL },
+    { 2, SDL_CONTROLLER_BUTTON_Y,         CMD_DISPLAY_SKILLS },
+    { 2, SDL_CONTROLLER_BUTTON_B,         CMD_REPLAY_MESSAGES },
+    { 2, SDL_CONTROLLER_BUTTON_DPAD_UP,   CMD_RESISTS_SCREEN },
+    { 2, SDL_CONTROLLER_BUTTON_DPAD_DOWN, CMD_DISPLAY_OVERMAP },
+    { 2, SDL_CONTROLLER_BUTTON_DPAD_LEFT, CMD_DISPLAY_RELIGION },
+    { 2, SDL_CONTROLLER_BUTTON_DPAD_RIGHT, CMD_DISPLAY_SPELLS },
+};
+
+static command_type _pad_chord_command(int modifier, Uint8 button)
+{
+    for (const pad_chord &chord : PAD_CHORDS)
+        if (chord.modifier == modifier && chord.button == button)
+            return chord.cmd;
+    return CMD_NO_CMD;
+}
+
+// "R1+Square" for a command a held button does, or "".
+string ps5_pad_chord_for_command(int cmd)
+{
+    for (const pad_chord &chord : PAD_CHORDS)
+    {
+        if (chord.cmd != cmd)
+            continue;
+        const char *button = "";
+        switch (chord.button)
+        {
+        case SDL_CONTROLLER_BUTTON_A:          button = "Cross"; break;
+        case SDL_CONTROLLER_BUTTON_B:          button = "Circle"; break;
+        case SDL_CONTROLLER_BUTTON_X:          button = "Square"; break;
+        case SDL_CONTROLLER_BUTTON_Y:          button = "Triangle"; break;
+        case SDL_CONTROLLER_BUTTON_DPAD_UP:    button = "D-pad up"; break;
+        case SDL_CONTROLLER_BUTTON_DPAD_DOWN:  button = "D-pad down"; break;
+        case SDL_CONTROLLER_BUTTON_DPAD_LEFT:  button = "D-pad left"; break;
+        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: button = "D-pad right"; break;
+        default: break;
+        }
+        return string(chord.modifier == 1 ? "R1" : "R2") + "+" + button;
+    }
+    return "";
+}
+
+namespace
+{
 
 // The key for a direction; dx and dy are -1, 0 or 1. Diagonals use the
 // keypad keys, which move diagonally in the dungeon, targeting and the map.
@@ -1356,6 +1435,28 @@ static int _handle_controller_event(const SDL_Event &sdlevent, wm_event *event)
 
     case SDL_CONTROLLERBUTTONDOWN:
     {
+#ifdef USE_PS5_NATIVE
+        const Uint8 pressed = sdlevent.cbutton.button;
+        if (_pad_mode() == pad_mode::command)
+        {
+            if (pressed == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
+            {
+                pad_r1_pending = true;
+                pad_modifier_used = false;
+                return 0;
+            }
+            const int modifier = pad_r1_pending ? 1 : pad_r2_pending ? 2 : 0;
+            if (modifier)
+            {
+                // A button with R1 or R2 held: the chord's command, or
+                // nothing (never the button's plain action).
+                pad_modifier_used = true;
+                const command_type cmd = _pad_chord_command(modifier, pressed);
+                return cmd == CMD_NO_CMD ? 0
+                    : _pad_key_event(event, encode_command_as_key(cmd));
+            }
+        }
+#endif
         int dx, dy;
         if (_pad_dpad_direction(sdlevent.cbutton.button, dx, dy))
         {
@@ -1367,6 +1468,15 @@ static int _handle_controller_event(const SDL_Event &sdlevent, wm_event *event)
     }
 
     case SDL_CONTROLLERBUTTONUP:
+#ifdef USE_PS5_NATIVE
+        if (sdlevent.cbutton.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER
+            && pad_r1_pending)
+        {
+            pad_r1_pending = false;
+            // Released alone: it was a tap.
+            return pad_modifier_used ? 0 : _pad_key_event(event, 'f');
+        }
+#endif
         if (sdlevent.cbutton.button == pad_dpad_button)
         {
             pad_dpad_button = -1;
@@ -1397,6 +1507,23 @@ static int _handle_controller_event(const SDL_Event &sdlevent, wm_event *event)
                 return 0;
             pad_trigger_held[right] = held;
             const pad_mode mode = _pad_mode();
+#ifdef USE_PS5_NATIVE
+            if (right)
+            {
+                if (held && mode == pad_mode::command)
+                {
+                    pad_r2_pending = true;
+                    pad_modifier_used = false;
+                    return 0;
+                }
+                if (!held && pad_r2_pending)
+                {
+                    pad_r2_pending = false;
+                    return pad_modifier_used ? 0
+                                             : _pad_key_event(event, CK_TAB);
+                }
+            }
+#endif
             if (!held || mode == pad_mode::menu)
                 return 0;
 #ifdef USE_PS5_NATIVE

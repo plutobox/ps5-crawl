@@ -33,14 +33,30 @@ waiting for.
 | □ Square | Cast a spell (`z`) | Type in the text field (name, seed) | |
 | △ Triangle | Inventory (`i`) | | |
 | L1 | Wait a turn (`s`) | Previous page | |
-| R1 | Fire (`f`) | Next page | Fire at the target |
-| L2 | Explore automatically (`o`) | | |
-| R2 | Fight the nearest monster (`Tab`) | | |
+| R1 | Fire (`f`) when tapped; hold it for the item layer | Next page | Fire at the target |
+| L2 | Explore automatically (`o`) | | Previous target |
+| R2 | Fight the nearest monster (`Tab`) when tapped; hold it for the planning layer | | Next target |
 | L3 | Examine (`x`) | | |
 | R3 | Rest (`5`) | | |
 | Create | Abilities (`a`) | | |
 | Options | Game menu (`~`): save, quit, help, settings | Cancel | Cancel |
 | Touchpad | Level map (`X`) | | |
+
+**Holding R1 or R2** changes the other buttons. R1 is the hands (items), R2
+is the head (knowing and planning); a tap on its own still fires or attacks.
+
+| | Hold R1: items | Hold R2: know and plan |
+|---|---|---|
+| ✕ Cross | Drink | Travel |
+| □ Square | Read | Memorise a spell |
+| △ Triangle | Wield, wear, put on | Skills |
+| ○ Circle | Take off, remove | Previous messages |
+| D-pad up | Evoke | Character overview |
+| D-pad down | Drop | Dungeon overview |
+| D-pad left | Swap weapon | Religion |
+| D-pad right | Choose what to fire | Spell list |
+
+Everything else is in Options, **All commands**. In the game, Options, Help and manual opens a controller page with all of this.
 
 **Typing text** uses the PS5's own on-screen keyboard:
 - Questions that ask you to type, such as inscribing an item, searching
@@ -56,9 +72,7 @@ Crawl picks a random name for you.
 
 - **Typing a repeat count.** The prompt that reads a number and then a
   command still expects keys, so it can only be cancelled.
-- **Commands without a button.** Only the commands in the table have a
-  button. The rest (such as quaff, read, wear and evoke) are reached through
-  the inventory, so item actions work but there's no shortcut for each.
+- **A button for every command.** The rest are in Options, All commands.
 - **A hint bar.** The screen doesn't show what each button does.
 - **Your PSN name.** The game doesn't read the console's user name.
 - **A closing screen.** A PS5 title may not exit by itself. After you save

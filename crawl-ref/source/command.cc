@@ -591,6 +591,9 @@ static const vector<pad_command_group> &_pad_command_groups()
 // "Square", or "" if none does.
 string ps5_pad_label_for_command(command_type cmd)
 {
+    const string chord = ps5_pad_chord_for_command(cmd);
+    if (!chord.empty())
+        return chord;
     for (int key : command_to_keys(cmd))
     {
         string button = ps5_pad_button_for_key(key);
@@ -684,9 +687,28 @@ static void _add_formatted_pad_help(column_composer &cols)
         "<w>Touchpad</w>  : map of the level\n"
         "<w>Options</w>   : game menu\n"
         "\n"
+        "<h>Hold R1: items\n"
+        "\n"
+        "<w>Cross</w>     : drink     <w>Square</w> : read\n"
+        "<w>Triangle</w>  : wield, wear, put on\n"
+        "<w>Circle</w>    : take off, remove\n"
+        "<w>D-pad up</w>  : evoke     <w>down</w>   : drop\n"
+        "<w>left</w>      : swap weapon\n"
+        "<w>right</w>     : choose what to fire\n"
+        "\n"
+        "<h>Hold R2: know and plan\n"
+        "\n"
+        "<w>Cross</w>     : travel    <w>Square</w> : memorise\n"
+        "<w>Triangle</w>  : skills\n"
+        "<w>Circle</w>    : previous messages\n"
+        "<w>D-pad up</w>  : character overview\n"
+        "<w>down</w>      : dungeon overview\n"
+        "<w>left</w>      : religion\n"
+        "<w>right</w>     : your spells\n"
+        "\n"
+        "R1 or R2 alone still fire and attack.\n"
         "Anything else is under <w>Options</w>,\n"
-        "<w>All commands</w>: wear armour, read,\n"
-        "travel, skills...\n",
+        "<w>All commands</w>.\n",
         false);
 
     cols.add_formatted(

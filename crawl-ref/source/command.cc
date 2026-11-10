@@ -634,6 +634,7 @@ bool ps5_choose_command(command_type &chosen)
     menu.action_cycle = Menu::CYCLE_NONE;
     menu.menu_action = Menu::ACT_EXECUTE;
 
+    int index = 0;
     for (const auto &group : _pad_command_groups())
     {
         menu.add_entry(new MenuEntry(group.title, MEL_SUBTITLE));
@@ -643,8 +644,10 @@ bool ps5_choose_command(command_type &chosen)
             const string button = ps5_pad_label_for_command(entry.cmd);
             if (!button.empty())
                 label += "  <darkgrey>(" + button + ")</darkgrey>";
-            // No letters to press: the cursor and Cross choose.
-            auto *item = new MenuEntry(label, MEL_ITEM, 1, 0);
+            // The menu only highlights entries that have a hotkey; the
+            // cursor and Cross choose, the letters are a bonus.
+            auto *item = new MenuEntry(label, MEL_ITEM, 1,
+                                       index_to_letter(index++));
             item->data = reinterpret_cast<void *>(
                 static_cast<intptr_t>(entry.cmd));
             menu.add_entry(item);

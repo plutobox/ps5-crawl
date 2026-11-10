@@ -52,10 +52,10 @@ its own still fires (R1), attacks (R2) or waits a turn (L1).
 | □ Square | Read | Memorise a spell | Shout (order allies) |
 | △ Triangle | Wield, wear, put on | Skills | Search for items seen |
 | ○ Circle | Take off, remove | Previous messages | Open a door |
-| D-pad up | Evoke | Character overview | Status effects |
-| D-pad down | Drop | Dungeon overview | Known items |
-| D-pad left | Swap weapon | Religion | Mutations |
-| D-pad right | Choose what to fire | Spell list | Runes |
+| D-pad up | Evoke | Character overview | Move up-right |
+| D-pad down | Drop | Dungeon overview | Move down-left |
+| D-pad left | Swap weapon | Religion | Move up-left |
+| D-pad right | Choose what to fire | Spell list | Move down-right |
 
 Everything else is in Options, **All commands**. In the game, Options, Help and manual opens a controller page with all of this.
 

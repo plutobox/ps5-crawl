@@ -1156,10 +1156,7 @@ static const pad_chord PAD_CHORDS[] =
     { 3, SDL_CONTROLLER_BUTTON_X, CMD_SHOUT,        "shout" },
     { 3, SDL_CONTROLLER_BUTTON_Y, CMD_SEARCH_STASHES, "find items" },
     { 3, SDL_CONTROLLER_BUTTON_B, CMD_OPEN_DOOR,    "open door" },
-    { 3, PAD_UP,    CMD_DISPLAY_CHARACTER_STATUS, "status" },
-    { 3, PAD_DOWN,  CMD_DISPLAY_KNOWN_OBJECTS,    "known items" },
-    { 3, PAD_LEFT,  CMD_DISPLAY_MUTATIONS,        "mutations" },
-    { 3, PAD_RIGHT, CMD_DISPLAY_RUNES,            "runes" },
+    // (L1 and the d-pad move diagonally: see the button handling.)
     // R2: knowing and planning
     { 2, SDL_CONTROLLER_BUTTON_A, CMD_INTERLEVEL_TRAVEL, "travel" },
     { 2, SDL_CONTROLLER_BUTTON_X, CMD_MEMORISE_SPELL,    "memorise" },
@@ -1479,6 +1476,18 @@ static int _handle_controller_event(const SDL_Event &sdlevent, wm_event *event)
             }
             const int modifier = pad_r1_pending ? 1 : pad_r2_pending ? 2
                                : pad_l1_pending ? 3 : 0;
+            int dx, dy;
+            if (modifier == 3 && _pad_dpad_direction(pressed, dx, dy))
+            {
+                // L1 held: the d-pad turns 45 degrees clockwise, so each of
+                // its four buttons moves diagonally (up = up-right, right =
+                // down-right, down = down-left, left = up-left), and repeats
+                // while held like any direction.
+                pad_modifier_used = true;
+                pad_dpad_button = pressed;
+                pad_dpad_key = _pad_direction_key(dx - dy, dx + dy);
+                return _pad_direction_changed(event);
+            }
             if (modifier)
             {
                 // A button with R1 or R2 held: the chord's command, or
@@ -2042,6 +2051,8 @@ string ps5_pad_layer_text()
     const char *title = modifier == 1 ? "items"
                       : modifier == 2 ? "know and plan" : "the world";
     string face, pad;
+    if (modifier == 3)
+        pad = "<w>moves diagonally</w> (up = up-right, right = down-right...)";
     for (const pad_chord &chord : PAD_CHORDS)
     {
         if (chord.modifier != modifier)

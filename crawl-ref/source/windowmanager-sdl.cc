@@ -1032,8 +1032,7 @@ pad_mode _pad_mode()
     return pad_mode::other;
 }
 
-// What Cross/A does in the dungeon: take the stairs, pick up items, or (on
-// the PS5) wait a turn.
+// What Cross/A does in the dungeon: take the stairs or pick up items.
 int _pad_context_key()
 {
     switch (feat_stair_direction(env.grid(you.pos())))
@@ -1047,10 +1046,6 @@ int _pad_context_key()
     }
     if (you.visible_igrd(you.pos()) != NON_ITEM)
         return 'g';
-#ifdef USE_PS5_NATIVE
-    // Nothing here to use: wait a turn.
-    return 's';
-#endif
     return 0;
 }
 
@@ -1063,6 +1058,10 @@ int _pad_button_key(Uint8 button)
     case SDL_CONTROLLER_BUTTON_A:
         return cmd ? _pad_context_key() : CK_ENTER;
     case SDL_CONTROLLER_BUTTON_B:
+#ifdef USE_PS5_NATIVE
+        // Escape does nothing in the dungeon, so there Circle waits a turn.
+        return cmd ? 's' : CK_ESCAPE;
+#endif
         return CK_ESCAPE;
     case SDL_CONTROLLER_BUTTON_X:
 #ifdef USE_PS5_NATIVE
@@ -1114,7 +1113,7 @@ string ps5_pad_button_for_key(int key)
         return "Cross";
     case 'z':    return "Square";
     case 'i':    return "Triangle";
-    case 's':    return "L1";
+    case 's':    return "Circle"; // (L1 tapped waits too)
     case 'f':    return "R1";
     case 'x':    return "L3";
     case '5':    return "R3";

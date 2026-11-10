@@ -1027,7 +1027,8 @@ pad_mode _pad_mode()
     return pad_mode::other;
 }
 
-// What Cross/A does in the dungeon: take the stairs or pick up items.
+// What Cross/A does in the dungeon: take the stairs, pick up items, or (on
+// the PS5) wait a turn.
 int _pad_context_key()
 {
     switch (feat_stair_direction(env.grid(you.pos())))
@@ -1041,6 +1042,10 @@ int _pad_context_key()
     }
     if (you.visible_igrd(you.pos()) != NON_ITEM)
         return 'g';
+#ifdef USE_PS5_NATIVE
+    // Nothing here to use: wait a turn.
+    return 's';
+#endif
     return 0;
 }
 

@@ -225,9 +225,10 @@ jobs:
           git push --atomic origin "HEAD:refs/heads/ps5" "refs/tags/$RELEASE_TAG"
 
       - name: Publish release
-        # A pre-release with the title zip as its only asset, as the catalog
-        # requires. An existing release is never changed: a listed asset's
-        # sha256 must not change.
+        # A normal release with the title zip as its only asset. The catalog
+        # accepts pre-releases too, but those never count as the repository's
+        # latest release. An existing release is never changed: a listed
+        # asset's sha256 must not change.
         if: env.RELEASE_TAG != ''
         env:
           GH_TOKEN: ${{ github.token }}
@@ -237,6 +238,6 @@ jobs:
             exit 0
           fi
           gh release create "$RELEASE_TAG" "dist/$TITLE_ID.zip" \
-            --verify-tag --prerelease \
+            --verify-tag \
             --title "Dungeon Crawl Stone Soup for PS5 $RELEASE_TAG" \
             --notes-file "$RUNNER_TEMP/notes.md"

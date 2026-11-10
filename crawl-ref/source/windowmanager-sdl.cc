@@ -1015,6 +1015,7 @@ bool pad_trigger_held[2] = { false, false };
 // them (a chord) or they are released alone (a tap: fire, attack).
 bool pad_r1_pending = false;
 bool pad_r2_pending = false;
+bool pad_l1_pending = false;
 bool pad_modifier_used = false;
 
 pad_mode _pad_mode()
@@ -1120,14 +1121,15 @@ namespace
 
 } // namespace
 
-// Holding R1 or R2 changes what the other buttons do. R1 is the hands (the
-// items), R2 is the head (knowing, planning). Each layer uses the same
-// positions for the same kind of thing: Cross the commonest, Square the second,
-// Triangle and Circle a pair of opposites where there is one.
-// Pressing R1 or R2 alone still fires or attacks (on release).
+// Holding R1, R2 or L1 changes what the other buttons do. R1 is the hands (the
+// items), R2 is the head (knowing, planning), L1 is the world around you.
+// Each layer uses the same positions for the same kind of thing: Cross the
+// commonest, Square the second, Triangle and Circle a pair of opposites where
+// there is one. Pressing one alone still does its plain action (on release):
+// R1 fires, R2 attacks, L1 waits.
 struct pad_chord
 {
-    int modifier;       // 1: R1, 2: R2
+    int modifier;       // 1: R1, 2: R2, 3: L1
     Uint8 button;
     command_type cmd;
 };
@@ -1143,6 +1145,15 @@ static const pad_chord PAD_CHORDS[] =
     { 1, SDL_CONTROLLER_BUTTON_DPAD_DOWN, CMD_DROP },
     { 1, SDL_CONTROLLER_BUTTON_DPAD_LEFT, CMD_WEAPON_SWAP },
     { 1, SDL_CONTROLLER_BUTTON_DPAD_RIGHT, CMD_QUIVER_ITEM },
+    // L1: the world
+    { 3, SDL_CONTROLLER_BUTTON_A,         CMD_CLOSE_DOOR },
+    { 3, SDL_CONTROLLER_BUTTON_X,         CMD_SHOUT },
+    { 3, SDL_CONTROLLER_BUTTON_Y,         CMD_SEARCH_STASHES },
+    { 3, SDL_CONTROLLER_BUTTON_B,         CMD_OPEN_DOOR },
+    { 3, SDL_CONTROLLER_BUTTON_DPAD_UP,   CMD_DISPLAY_CHARACTER_STATUS },
+    { 3, SDL_CONTROLLER_BUTTON_DPAD_DOWN, CMD_DISPLAY_KNOWN_OBJECTS },
+    { 3, SDL_CONTROLLER_BUTTON_DPAD_LEFT, CMD_DISPLAY_MUTATIONS },
+    { 3, SDL_CONTROLLER_BUTTON_DPAD_RIGHT, CMD_DISPLAY_RUNES },
     // R2: knowing and planning
     { 2, SDL_CONTROLLER_BUTTON_A,         CMD_INTERLEVEL_TRAVEL },
     { 2, SDL_CONTROLLER_BUTTON_X,         CMD_MEMORISE_SPELL },
@@ -1182,7 +1193,8 @@ string ps5_pad_chord_for_command(int cmd)
         case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: button = "D-pad right"; break;
         default: break;
         }
-        return string(chord.modifier == 1 ? "R1" : "R2") + "+" + button;
+        return string(chord.modifier == 1 ? "R1"
+                      : chord.modifier == 2 ? "R2" : "L1") + "+" + button;
     }
     return "";
 }
@@ -1439,13 +1451,16 @@ static int _handle_controller_event(const SDL_Event &sdlevent, wm_event *event)
         const Uint8 pressed = sdlevent.cbutton.button;
         if (_pad_mode() == pad_mode::command)
         {
-            if (pressed == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
+            if (pressed == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER
+                || pressed == SDL_CONTROLLER_BUTTON_LEFTSHOULDER)
             {
-                pad_r1_pending = true;
+                (pressed == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER
+                    ? pad_r1_pending : pad_l1_pending) = true;
                 pad_modifier_used = false;
                 return 0;
             }
-            const int modifier = pad_r1_pending ? 1 : pad_r2_pending ? 2 : 0;
+            const int modifier = pad_r1_pending ? 1 : pad_r2_pending ? 2
+                               : pad_l1_pending ? 3 : 0;
             if (modifier)
             {
                 // A button with R1 or R2 held: the chord's command, or
@@ -1475,6 +1490,12 @@ static int _handle_controller_event(const SDL_Event &sdlevent, wm_event *event)
             pad_r1_pending = false;
             // Released alone: it was a tap.
             return pad_modifier_used ? 0 : _pad_key_event(event, 'f');
+        }
+        if (sdlevent.cbutton.button == SDL_CONTROLLER_BUTTON_LEFTSHOULDER
+            && pad_l1_pending)
+        {
+            pad_l1_pending = false;
+            return pad_modifier_used ? 0 : _pad_key_event(event, 's');
         }
 #endif
         if (sdlevent.cbutton.button == pad_dpad_button)

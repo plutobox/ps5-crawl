@@ -32,7 +32,7 @@ waiting for.
 | ○ Circle | Cancel (Esc) | Cancel | Cancel |
 | □ Square | Cast a spell (`z`) | Type in the text field (name, seed) | |
 | △ Triangle | Inventory (`i`) | | |
-| L1 | Wait a turn (`s`) | Previous page | |
+| L1 | Wait a turn (`s`) when tapped; hold it for the world layer | Previous page | |
 | R1 | Fire (`f`) when tapped; hold it for the item layer | Next page | Fire at the target |
 | L2 | Explore automatically (`o`) | | Previous target |
 | R2 | Fight the nearest monster (`Tab`) when tapped; hold it for the planning layer | | Next target |
@@ -42,19 +42,20 @@ waiting for.
 | Options | Game menu (`~`): save, quit, help, settings | Cancel | Cancel |
 | Touchpad | Level map (`X`) | | |
 
-**Holding R1 or R2** changes the other buttons. R1 is the hands (items), R2
-is the head (knowing and planning); a tap on its own still fires or attacks.
+**Holding R1, R2 or L1** changes the other buttons. R1 is the hands (items),
+R2 is the head (knowing and planning), L1 is the world around you. A tap on
+its own still fires (R1), attacks (R2) or waits a turn (L1).
 
-| | Hold R1: items | Hold R2: know and plan |
-|---|---|---|
-| ✕ Cross | Drink | Travel |
-| □ Square | Read | Memorise a spell |
-| △ Triangle | Wield, wear, put on | Skills |
-| ○ Circle | Take off, remove | Previous messages |
-| D-pad up | Evoke | Character overview |
-| D-pad down | Drop | Dungeon overview |
-| D-pad left | Swap weapon | Religion |
-| D-pad right | Choose what to fire | Spell list |
+| | Hold R1: items | Hold R2: know and plan | Hold L1: the world |
+|---|---|---|---|
+| ✕ Cross | Drink | Travel | Close a door |
+| □ Square | Read | Memorise a spell | Shout (order allies) |
+| △ Triangle | Wield, wear, put on | Skills | Search for items seen |
+| ○ Circle | Take off, remove | Previous messages | Open a door |
+| D-pad up | Evoke | Character overview | Status effects |
+| D-pad down | Drop | Dungeon overview | Known items |
+| D-pad left | Swap weapon | Religion | Mutations |
+| D-pad right | Choose what to fire | Spell list | Runes |
 
 Everything else is in Options, **All commands**. In the game, Options, Help and manual opens a controller page with all of this.
 

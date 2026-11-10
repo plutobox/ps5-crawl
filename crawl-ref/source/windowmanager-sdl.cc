@@ -1019,7 +1019,7 @@ bool pad_l1_pending = false;
 bool pad_modifier_used = false;
 // The box for a held layer shows only after it has been held a moment, so a
 // quick tap or chord doesn't flash it.
-const Uint32 PAD_LAYER_BOX_DELAY_MS = 2000;
+const Uint32 PAD_LAYER_BOX_DELAY_MS = 1000;
 Uint32 pad_layer_since = 0;
 bool pad_layer_shown = false;
 

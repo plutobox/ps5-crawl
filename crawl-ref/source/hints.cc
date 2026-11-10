@@ -26,6 +26,7 @@
 #include "items.h"
 #include "jobs.h"
 #include "libutil.h"
+#include "command.h"
 #include "macro.h"
 #include "message.h"
 #include "mutation.h"
@@ -336,7 +337,12 @@ void hint_replace_cmds(string &text)
         string command = text.substr(p + 5, q - p - 5);
         command_type cmd = name_to_command(command);
 
+#ifdef USE_PS5_NATIVE
+        // The tutorial names a controller button, not a key.
+        command = ps5_pad_command_text(cmd);
+#else
         command = command_to_string(cmd);
+#endif
         if (command == "<")
             command += "<";
 

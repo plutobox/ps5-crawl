@@ -16,9 +16,6 @@
 #include <sstream>
 #include <string>
 #include <utility> // pair
-#ifdef USE_PS5_NATIVE
-# include <unistd.h> // dup2
-#endif
 #include <vector>
 #include <fcntl.h>
 #if defined(UNIX) || defined(TARGET_COMPILER_MINGW)
@@ -242,16 +239,6 @@ __attribute__((externally_visible))
 #endif
 int main(int argc, char *argv[])
 {
-#ifdef USE_PS5_NATIVE
-    // A native PS5 title has no console: keep Crawl's output in a file that
-    // can be read back over FTP. Unbuffered, so a crash loses nothing.
-    if (freopen("/data/crawl-ps5.log", "w", stdout))
-    {
-        setvbuf(stdout, nullptr, _IONBF, 0);
-        dup2(fileno(stdout), fileno(stderr));
-    }
-    printf("%s starting\n", CRAWL);
-#endif
 #ifdef DGAMELAUNCH
     // avoid commas instead of dots, etc, on CDO
     setlocale(LC_CTYPE, "");
@@ -2049,6 +2036,17 @@ public:
             MEL_TITLE));
         on_single_selection = [this](const MenuEntry& item)
         {
+#ifdef USE_PS5_NATIVE
+            if (!item.hotkeys.empty() && item.hotkeys[0] == 'C')
+            {
+                // All commands: the commands without a button.
+                command_type picked = CMD_NO_CMD;
+                if (!ps5_choose_command(picked))
+                    return true; // back to this menu
+                cmd = picked;
+                return false;
+            }
+#endif
             const CmdMenuEntry *c = dynamic_cast<const CmdMenuEntry *>(&item);
             if (c)
             {
@@ -2093,6 +2091,10 @@ public:
 #ifdef USE_TILE_LOCAL
         add_entry(new CmdMenuEntry("Edit player tile",
             MEL_ITEM, '-', CMD_EDIT_PLAYER_TILE));
+#endif
+#ifdef USE_PS5_NATIVE
+        add_entry(new CmdMenuEntry("All commands",
+            MEL_ITEM, 'C', CMD_NO_CMD, false));
 #endif
         add_entry(new CmdMenuEntry("Edit macros",
             MEL_ITEM, '~', CMD_MACRO_MENU));

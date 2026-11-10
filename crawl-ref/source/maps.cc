@@ -1527,8 +1527,14 @@ void read_map(const string &file)
 
 void read_maps()
 {
+#ifdef USE_PS5_NATIVE
+    printf("[crawl] read_maps: loadmaps.lua\n");
+#endif
     if (dlua.execfile("dlua/loadmaps.lua", true, true, true))
         end(1, false, "Lua error: %s", dlua.error.c_str());
+#ifdef USE_PS5_NATIVE
+    printf("[crawl] read_maps: sanity.lua\n");
+#endif
 
     lc_loaded_maps.clear();
 

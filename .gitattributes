@@ -1,0 +1,7 @@
+# The PS5 build runs on Linux (WSL or CI). Its scripts and tooling keep LF
+# line endings in every checkout, a Windows one too: bash, python and the
+# linker scripts fail on CRLF.
+*.sh text eol=lf
+*.py text eol=lf
+crawl-ref/source/ps5/** text=auto eol=lf
+crawl-ref/source/Makefile text eol=lf

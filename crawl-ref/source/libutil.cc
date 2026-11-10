@@ -324,6 +324,21 @@ static void inline _untag(string &s, const string &pre,
 
 string untag_tiles_console(string s)
 {
+#ifdef USE_PS5_NATIVE
+    // A controller has no mouse and no keyboard: the tutorial text for the
+    // tiles UI (clicking, hovering) and the console (glyphs, typed keys) are
+    // both dropped. <pad> text is for the controller, <nopad> for the rest.
+    _untag(s, "<pad>", "</pad>", true);
+    _untag(s, "<nopad>", "</nopad>", false);
+    _untag(s, "<tiles>", "</tiles>", false);
+    _untag(s, "<console>", "</console>", false);
+    _untag(s, "<webtiles>", "</webtiles>", false);
+    _untag(s, "<localtiles>", "</localtiles>", false);
+    _untag(s, "<nomouse>", "</nomouse>", true);
+    return s;
+#endif
+    _untag(s, "<pad>", "</pad>", false);
+    _untag(s, "<nopad>", "</nopad>", true);
     _untag(s, "<tiles>", "</tiles>", is_tiles());
     _untag(s, "<console>", "</console>", !is_tiles());
 #ifdef USE_TILE_WEB

@@ -30,6 +30,15 @@ void show_spell_library_help();
 
 void show_help(int section = CK_HOME, string highlight_string = "");
 
+#ifdef USE_PS5_NATIVE
+// The controller button that does a command ("Square"), or "".
+string ps5_pad_label_for_command(command_type cmd);
+// How the tutorial names a command: its button, or where to find it.
+string ps5_pad_command_text(command_type cmd);
+// Options > All commands: choose any command by name.
+bool ps5_choose_command(command_type &chosen);
+#endif
+
 int show_keyhelp_menu(const vector<formatted_string> &lines);
 
 // XXX: Actually defined in main.cc; we may want to move this to command.cc.

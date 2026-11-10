@@ -1,0 +1,29 @@
+# System modules a native title may import: the SDK stubs ps5-link.py links
+# against. A function only some other module exports then fails the link with
+# its name ("undefined symbol"), instead of resolving to a module the console
+# does not give a title and jumping to address 0 when called.
+#
+# Known bad, never add them:
+#   libScePosixForWebKit  the only exporter of strcasestr, mkstemp, isatty,
+#                         ...; calls into it crash at address 0
+#                         (SwanStationPS5 docs/boilerplate/CURL.md, and our
+#                         own RIP 0 crashes)
+#   libkernel_web         the browser's libkernel
+#   libSceKeyboard        a title importing it does not launch (SwanStationPS5)
+#
+# Add a module only after a title importing it has launched on the console.
+# Each name is a stub file found in the payload SDK's target/lib or in a -L
+# directory of the link.
+
+libkernel.so            # verified: every title
+libSceLibcInternal.so   # verified: every title (the C library)
+libSceSystemService.so  # verified: Crawl, NetHack, Apotris
+libSceUserService.so    # verified: Crawl, NetHack (player name, pads)
+libScePad.so            # verified: SDL's joystick driver
+libSceAudioOut.so       # verified: SDL's audio driver (Apotris)
+libSceVideoOut.so       # verified: the OpenGL SDK's display
+libSceAgc.so            # verified: the OpenGL SDK (its own stub, in its lib/)
+libSceAgcDriver.so      # verified: the OpenGL SDK (its own stub, in its lib/)
+libSceImeDialog.so      # verified: Crawl, NetHack; loaded at run time first
+                        # (ps5/app/ime.c), SwanStation saw a launch failure
+                        # when it was not

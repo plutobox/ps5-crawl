@@ -1832,6 +1832,16 @@ bool Menu::process_command(command_type cmd)
     case CMD_MENU_ACCEPT_SELECTION:
         ASSERT(is_set(MF_MULTISELECT));
         get_selected(&sel);
+#ifdef USE_PS5_NATIVE
+        // Nothing ticked: take the highlighted entry, so a single item can be
+        // picked from a list without ticking it first.
+        if (sel.empty() && is_set(MF_ARROWS_SELECT) && last_hovered >= 0
+            && items[last_hovered]->level == MEL_ITEM)
+        {
+            select_item_index(last_hovered, MENU_SELECT_ALL);
+            get_selected(&sel);
+        }
+#endif
         ret = sel.empty(); // only exit if there is a selection, otherwise noop
         break;
     case CMD_MENU_SELECT:
@@ -2000,6 +2010,16 @@ bool Menu::process_key(int keyin)
 
 #ifdef USE_TILE_WEB
     const int old_vis_first = get_first_visible();
+#endif
+#ifdef USE_PS5_NATIVE
+    // No letters on a controller: Square ticks the highlighted entry of a menu
+    // that takes several (it types text in a text field, which never gets
+    // here).
+    if (keyin == CK_PS5_TYPE
+        && !!(flags & MF_MULTISELECT) && !!(flags & MF_ARROWS_SELECT))
+    {
+        keyin = '.';
+    }
 #endif
     if (keyin == ' '
         && !!(flags & MF_MULTISELECT) && !!(flags & MF_ARROWS_SELECT))

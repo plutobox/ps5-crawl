@@ -28,19 +28,37 @@ waiting for.
 | Button | In the dungeon | In menus and prompts | When targeting |
 |---|---|---|---|
 | D-pad / left stick | Move in 8 directions (hold to repeat) | Move the cursor | Move the cursor |
-| ✕ Cross | Take the stairs, or pick up what's here | Confirm (Enter) | Confirm |
-| ○ Circle | Cancel (Esc) | Cancel | Cancel |
-| □ Square | Cast a spell (`z`) | Type in the text field (name, seed) | |
-| △ Triangle | Inventory (`i`) | | |
-| L1 | Wait a turn (`s`) | Previous page | |
-| R1 | Fire (`f`) | Next page | Fire at the target |
-| L2 | Explore automatically (`o`) | | |
-| R2 | Fight the nearest monster (`Tab`) | | |
+| ✕ Cross | Take the stairs, or pick up what's here | Confirm (Enter); in a list of items, take the highlighted one | Confirm |
+| ○ Circle | Wait a turn (`s`) | Cancel (Esc) | Cancel |
+| □ Square | Cast a spell (`z`) | Tick an entry, in a menu that takes several; type in a text field (name, seed) | Type a key on the on-screen keyboard, for prompts that want a letter (also on the map and at questions) |
+| △ Triangle | Inventory (`i`); on an item's screen, D-pad left and right choose an action (wield, drop...) and ✕ Cross does it | | |
+| L1 | Wait a turn (`s`) when tapped; hold it for the world layer | Previous page | |
+| R1 | Fire (`f`) when tapped; hold it for the item layer | Next page | Fire at the target |
+| L2 | Explore automatically (`o`) | | Previous target |
+| R2 | Fight the nearest monster (`Tab`) when tapped; hold it for the planning layer | | Next target |
 | L3 | Examine (`x`) | | |
 | R3 | Rest (`5`) | | |
 | Create | Abilities (`a`) | | |
 | Options | Game menu (`~`): save, quit, help, settings | Cancel | Cancel |
 | Touchpad | Level map (`X`) | | |
+
+**Holding R1, R2 or L1** changes the other buttons. R1 is the hands (items),
+R2 is the head (knowing and planning), L1 is the world around you. A tap on
+its own still fires (R1), attacks (R2) or waits a turn (L1). Holding L1 also
+locks the left stick to the four diagonals.
+
+| | Hold R1: items | Hold R2: know and plan | Hold L1: the world |
+|---|---|---|---|
+| ✕ Cross | Drink | Travel | Close a door |
+| □ Square | Read | Memorise a spell | Shout (order allies) |
+| △ Triangle | Wield, wear, put on | Skills | Search for items seen |
+| ○ Circle | Take off, remove | Previous messages | Open a door |
+| D-pad up | Evoke | Character overview | Status effects |
+| D-pad down | Drop | Dungeon overview | Known items |
+| D-pad left | Swap weapon | Religion | Mutations |
+| D-pad right | Choose what to fire | Spell list | Runes |
+
+Everything else is in Options, **All commands**. In the game, Options, Help and manual opens a controller page with all of this.
 
 **Typing text** uses the PS5's own on-screen keyboard:
 - Questions that ask you to type, such as inscribing an item, searching
@@ -56,9 +74,7 @@ Crawl picks a random name for you.
 
 - **Typing a repeat count.** The prompt that reads a number and then a
   command still expects keys, so it can only be cancelled.
-- **Commands without a button.** Only the commands in the table have a
-  button. The rest (such as quaff, read, wear and evoke) are reached through
-  the inventory, so item actions work but there's no shortcut for each.
+- **A button for every command.** The rest are in Options, All commands.
 - **A hint bar.** The screen doesn't show what each button does.
 - **Your PSN name.** The game doesn't read the console's user name.
 - **A closing screen.** A PS5 title may not exit by itself. After you save
@@ -72,15 +88,15 @@ Crawl picks a random name for you.
 
 ## Build and release
 
-[`.github/workflows/ps5.yml`](workflows/ps5.yml) builds both versions with
-the pinned toolchain: ps5-native-app-boilerplate, ps5-opengl with its SDK
-and SDL2, PacBrew's PS5 libraries and mihawk-99's platform layer. To build
-the title by hand after setting those up in `$HOME`:
+[`.github/workflows/ps5.yml`](workflows/ps5.yml) builds both versions. The
+title is built by [`crawl-ref/source/ps5/build_ps5.py`](../crawl-ref/source/ps5/README.md),
+which pins everything it builds with; on Linux or WSL:
 
 ```sh
 cd crawl-ref/source
-make -j"$(nproc)" PS5_NATIVE=y crawl-native.objs
-bash ps5/package-native.sh --build   # -> build-ps5/app/dist/PPSA92041{,.zip}
+python3 ps5/build_ps5.py deps      # once: SDKs, libraries, SDL2, host tools
+python3 ps5/build_ps5.py build     # make PS5_NATIVE=y
+python3 ps5/build_ps5.py package   # -> ps5/dist/PPSA92041{,.zip}
 ```
 
 **Releasing.** The homebrew catalog tells consoles an update exists by

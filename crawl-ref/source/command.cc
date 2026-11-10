@@ -696,6 +696,7 @@ static void _add_formatted_pad_help(column_composer &cols)
         "<w>down</w>      : known items\n"
         "<w>left</w>      : mutations\n"
         "<w>right</w>     : runes\n"
+        "<w>Left stick</w>: diagonals only while held\n"
         "\n"
         "<h>Hold R1: items\n"
         "\n"

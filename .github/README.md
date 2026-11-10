@@ -44,7 +44,8 @@ waiting for.
 
 **Holding R1, R2 or L1** changes the other buttons. R1 is the hands (items),
 R2 is the head (knowing and planning), L1 is the world around you. A tap on
-its own still fires (R1), attacks (R2) or waits a turn (L1).
+its own still fires (R1), attacks (R2) or waits a turn (L1). Holding L1 also
+locks the left stick to the four diagonals.
 
 | | Hold R1: items | Hold R2: know and plan | Hold L1: the world |
 |---|---|---|---|

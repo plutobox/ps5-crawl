@@ -1260,6 +1260,12 @@ int _pad_stick_key(SDL_GameController *pad)
     const float mag = sqrtf(x * x + y * y);
     if (mag < PAD_STICK_THRESHOLD)
         return 0;
+#ifdef USE_PS5_NATIVE
+    // L1 held: locked to diagonals. Whatever way the stick leans, it moves
+    // to the nearest of the four.
+    if (pad_l1_pending)
+        return _pad_direction_key(x > 0 ? 1 : -1, y > 0 ? 1 : -1);
+#endif
     // An axis counts if the stick is within 67.5 degrees of it
     // (sin 22.5 = 0.38), which splits the circle into eight sectors.
     const int dx = fabsf(x) >= 0.38f * mag ? (x > 0 ? 1 : -1) : 0;
@@ -1475,6 +1481,17 @@ static int _handle_controller_event(const SDL_Event &sdlevent, wm_event *event)
                 (pressed == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER
                     ? pad_r1_pending : pad_l1_pending) = true;
                 pad_modifier_used = false;
+                if (pressed == SDL_CONTROLLER_BUTTON_LEFTSHOULDER)
+                {
+                    SDL_GameController *pad = SDL_GameControllerFromInstanceID(
+                        sdlevent.cbutton.which);
+                    pad_stick_key = pad ? _pad_stick_key(pad) : 0;
+                    if (pad_stick_key)
+                    {
+                        pad_modifier_used = true;
+                        return _pad_direction_changed(event);
+                    }
+                }
                 return _pad_redraw_event(event); // show the layer's box
             }
             const int modifier = pad_r1_pending ? 1 : pad_r2_pending ? 2
@@ -1514,8 +1531,15 @@ static int _handle_controller_event(const SDL_Event &sdlevent, wm_event *event)
             && pad_l1_pending)
         {
             pad_l1_pending = false;
-            return pad_modifier_used ? _pad_redraw_event(event)
-                                     : _pad_key_event(event, 's');
+            if (!pad_modifier_used)
+                return _pad_key_event(event, 's');
+            if (SDL_GameController *pad = SDL_GameControllerFromInstanceID(
+                    sdlevent.cbutton.which))
+            {
+                pad_stick_key = _pad_stick_key(pad);
+            }
+            // The stick may now lean a different way; else just redraw.
+            return _pad_direction_changed(event) ? 1 : _pad_redraw_event(event);
         }
 #endif
         if (sdlevent.cbutton.button == pad_dpad_button)
@@ -1537,6 +1561,10 @@ static int _handle_controller_event(const SDL_Event &sdlevent, wm_event *event)
             if (!pad)
                 return 0;
             pad_stick_key = _pad_stick_key(pad);
+#ifdef USE_PS5_NATIVE
+            if (pad_l1_pending && pad_stick_key)
+                pad_modifier_used = true;
+#endif
             return _pad_direction_changed(event);
         }
         if (axis.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT
@@ -2057,6 +2085,7 @@ string ps5_pad_layer_text()
     }
     return string("<yellow>Hold ") + _pad_modifier_name(modifier) + ": "
            + title + "</yellow>\n" + face + "\n<darkgrey>D-pad</darkgrey> "
-           + pad;
+           + pad
+           + (modifier == 3 ? "\n<w>Left stick</w> moves diagonally only" : "");
 }
 #endif

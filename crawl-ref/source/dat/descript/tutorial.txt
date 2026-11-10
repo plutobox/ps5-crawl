@@ -2,7 +2,7 @@
 tutorial intro
 
 You can reread all messages at any time with
-<input>$cmd[CMD_REPLAY_MESSAGES]</input>. Also, press <input>Space</input>
+<input>$cmd[CMD_REPLAY_MESSAGES]</input>. Also, press <nopad><input>Space</input></nopad><pad><input>Cross</input></pad>
 <localtiles> or <input>left click</input> with mouse</localtiles> to clear the
 <cyan>--more--</cyan> prompts.
 %%%%
@@ -23,7 +23,7 @@ tutorial1 start
 
 In this lesson you're going to learn how to move around and explore a level.
 You can move <localtiles>by clicking somewhere with your <input>Mouse</input>,
-or </localtiles>with the <input>arrow keys</input>.
+or </localtiles>with the <nopad><input>arrow keys</input></nopad><pad><input>D-pad</input> or the <input>left stick</input></pad>.
 %%%%
 tutorial1 go_on
 
@@ -32,19 +32,20 @@ You're doing great! Now, explore a bit until you reach the next blue square.
 tutorial1 diagonal
 
 :nowrap
-Move diagonally with the <input>number pad</input> (try Numlock on/off)<localtiles>,</localtiles> <console>or the </console><input>vi keys</input><console>.</console><localtiles>, or <input>mouse</input>.</localtiles>
+<nopad>Move diagonally with the <input>number pad</input> (try Numlock on/off)<localtiles>,</localtiles> <console>or the </console><input>vi keys</input><console>.</console><localtiles>, or <input>mouse</input>.</localtiles>
 
   Numpad:     <w>7 8 9</w>       vi-keys: <w>   $cmd[CMD_MOVE_UP_LEFT] $cmd[CMD_MOVE_UP] $cmd[CMD_MOVE_UP_RIGHT]</w><localtiles>    Mouse:     <w>click</w> on the floor</localtiles>
                \|/                     \|/
               <w>4</w>-<w>.</w>-<w>6</w> <w>                  $cmd[CMD_MOVE_LEFT]</w>-<w>.</w>-<w>$cmd[CMD_MOVE_RIGHT]</w>
                /|\                     /|\
-              <w>1 2 3</w> <w>                  $cmd[CMD_MOVE_DOWN_LEFT] $cmd[CMD_MOVE_DOWN] $cmd[CMD_MOVE_DOWN_RIGHT]</w>
+              <w>1 2 3</w> <w>                  $cmd[CMD_MOVE_DOWN_LEFT] $cmd[CMD_MOVE_DOWN] $cmd[CMD_MOVE_DOWN_RIGHT]</w></nopad><pad>Move diagonally by tilting the <input>left stick</input> diagonally.</pad>
 %%%%
 tutorial1 shiftmove
 
-A quicker way to “run” through a corridor is to press <input>Shift</input>
+<nopad>A quicker way to “run” through a corridor is to press <input>Shift</input>
 along with the <input>number pad</input> (try Numlock on/off) or <input>vi
-keys</input>.
+keys</input>.</nopad><pad>A quicker way to get through a level is to let the game explore for you. You
+will try that in a moment.</pad>
 %%%%
 tutorial1 downstairs
 
@@ -61,7 +62,7 @@ also can travel there with a <input>left click</input>.</localtiles><webtiles>
 You can </webtiles><nomouse>enter the overmap view with
 <input>$cmd[CMD_DISPLAY_MAP]</input> and then move the cursor around to look
 around the level. You also can travel wherever your cursor is pointing by
-pressing <input>.</input> or <input>Enter</input>. Press <input>Escape</input>
+pressing <nopad><input>.</input> or <input>Enter</input></nopad><pad><input>Cross</input></pad>. Press <nopad><input>Escape</input></nopad><pad><input>Circle</input></pad>
 to return to the normal game mode.</nomouse>
 %%%%
 tutorial1 autoexplore
@@ -86,8 +87,8 @@ Autoexplore will stop when you first see items or dungeon features, like these
 stairs. To travel directly to the stairs, you can
 <localtiles><input>click</input> on them; or you can </localtiles>press
 <input>$cmd[CMD_DISPLAY_MAP]</input> to enter the map overview, then
-<input><<</input> to move the cursor to the nearest up-stairs, and
-<input>Enter</input> to go there.
+<nopad><input><<</input> to move the cursor to the nearest up-stairs, and
+<input>Enter</input> to go there.</nopad><pad>move the cursor onto the stairs and press <input>Cross</input> to go there.</pad>
 %%%%
 tutorial1 tutorial_end
 
@@ -96,7 +97,7 @@ Congratulations! You've completed the first lesson!
 To exit the tutorial, simply go up these stairs with
 <input>$cmd[CMD_GO_UPSTAIRS]</input><localtiles> or by
 <input>left clicking</input> on your character</localtiles>. Confirm the
-resulting prompt with an uppercase <input>Y</input>.
+resulting prompt with <nopad>an uppercase <input>Y</input></nopad><pad><input>Cross</input> on <w>Yes</w></pad>.
 %%%%
 tutorial1 newlevel
 
@@ -126,7 +127,7 @@ with <input>$cmd[CMD_GO_UPSTAIRS]</input><localtiles> or by
 tutorial1 exit
 
 :nowrap
-<white>Tutorial 1 summary: Movement</white>
+<nopad><white>Tutorial 1 summary: Movement</white>
 
 <yellow>Movement commands</yellow>
    Numpad:       <w>7 8 9</w>           vi-keys:    <w>$cmd[CMD_MOVE_UP_LEFT] $cmd[CMD_MOVE_UP] $cmd[CMD_MOVE_UP_RIGHT]</w>
@@ -149,7 +150,21 @@ tutorial1 exit
 <yellow>Travel</yellow><localtiles>
   mouseclick on the <w>minimap</w></localtiles><nomouse>
   <input>$cmd[CMD_DISPLAY_MAP]</input>  enter the level map, travel with <input>Enter</input></nomouse>
-  <input>$cmd[CMD_EXPLORE]</input>  autoexplore
+  <input>$cmd[CMD_EXPLORE]</input>  autoexplore</nopad><pad><white>Tutorial 1 summary: Movement</white>
+
+<yellow>Movement</yellow>
+  <input>D-pad</input>, <input>left stick</input>  move; tilt the stick for diagonals
+
+<yellow>Staircases</yellow>
+  Stand on a staircase and press <input>Cross</input>: up stairs lead back to the
+  previous level, down stairs to the next.
+
+<yellow>Doors</yellow> can be opened by walking into them
+  <input>$cmd[CMD_CLOSE_DOOR]</input>  close an open door
+
+<yellow>Travel</yellow>
+  <input>$cmd[CMD_DISPLAY_MAP]</input>  enter the level map, travel with <input>Cross</input>
+  <input>$cmd[CMD_EXPLORE]</input>  autoexplore</pad>
 %%%%
 ##############################################
 # Tutorial map 2: Monsters and combat        #
@@ -163,7 +178,7 @@ tutorial2 pickup_weapon
 
 Pick up this weapon<localtiles> by clicking on it in the inventory panel, and
 then wield it by clicking on it again. Alternatively, pick it up</localtiles>
-with <input>$cmd[CMD_PICKUP]</input> or <input>g</input> and then wield it with
+with <input>$cmd[CMD_PICKUP]</input><nopad> or <input>g</input></nopad> and then wield it with
 <input>$cmd[CMD_EQUIP]</input>.
 %%%%
 tutorial2 melee
@@ -191,14 +206,17 @@ Remember, you can rest up with <input>$cmd[CMD_REST]</input>.
 tutorial2 compare_monster_desc
 
 # The keyboard commands are skipped in localtiles for clarity.
-Examine these monsters (<localtiles>via <input>mouseover</input></localtiles>
+<pad>Examine these monsters (by pressing <input>$cmd[CMD_LOOK_AROUND]</input> to enter examine
+mode, and then <input>$cmd[CMD_TARGET_CYCLE_FORWARD]</input> to cycle through nearby monsters)
+and compare what the game tells you about them to find out which of these
+cages is safer to fight through.</pad><nopad>Examine these monsters (<localtiles>via <input>mouseover</input></localtiles>
 <nomouse>by pressing <input>$cmd[CMD_LOOK_AROUND]</input> to enter examine mode,
 and then <input>$cmd[CMD_TARGET_CYCLE_FORWARD]</input> to cycle through nearby
 monsters</nomouse>)
 and compare their descriptions (<localtiles>with <input>rightmouseclick</input></localtiles>
 <nomouse>by pressing <input>$cmd[CMD_TARGET_DESCRIBE]</input> while selecting
 them in examine mode</nomouse>)
-to find out which of these cages is safer to fight through.
+to find out which of these cages is safer to fight through.</nopad>
 %%%%
 tutorial2 downstairs
 
@@ -214,7 +232,7 @@ Remember: You can reread old messages with
 tutorial2 boomerangs
 
 Now, for ranged combat! Pick up these boomerangs with
-<input>$cmd[CMD_PICKUP]</input> or <input>g</input><localtiles>, or by
+<input>$cmd[CMD_PICKUP]</input><nopad> or <input>g</input></nopad><localtiles>, or by
 <input>mouseclick</input>,</localtiles> and continue.
 %%%%
 tutorial2 throwing
@@ -222,8 +240,8 @@ tutorial2 throwing
 You can fire your boomerangs at a monster with <input>$cmd[CMD_FIRE]</input>
 <localtiles> or by <input>clicking</input> on them in the inventory
 panel</localtiles>. To confirm the auto-targeted monster, press
-<input>$cmd[CMD_TARGET_SELECT]</input> or <input>Enter</input>. You can skip
-this and fire at the closest monster with <input>shift-tab</input> or <input>p</input>.
+<input>$cmd[CMD_TARGET_SELECT]</input><nopad> or <input>Enter</input></nopad>.<nopad> You can skip
+this and fire at the closest monster with <input>shift-tab</input> or <input>p</input>.</nopad>
 %%%%
 tutorial2 wield_bow
 
@@ -238,8 +256,8 @@ Use <input>$cmd[CMD_PRIMARY_ATTACK]</input><localtiles> or <input>mouseclick</in
 </localtiles>. You can change the targeted monster by pressing
 <input>$cmd[CMD_TARGET_CYCLE_FORWARD]</input> while in target mode. The worm is
 harmless behind the lava, so concentrate on the dummy which can fire at you.
-Again, confirm your choice with <input>$cmd[CMD_TARGET_SELECT]</input> or
-<input>Enter</input>.
+Again, confirm your choice with <input>$cmd[CMD_TARGET_SELECT]</input><nopad> or
+<input>Enter</input></nopad>.
 %%%%
 tutorial2 travel_reminder
 
@@ -270,11 +288,11 @@ tutorial2 exit
   <input>mouseover</input>  examine a monster
   <input>rightclick</input> read a more detailed description</localtiles><nomouse>
   <input>$cmd[CMD_LOOK_AROUND]</input>  examine a monster
-  <input>$cmd[CMD_LOOK_AROUND]$cmd[CMD_TARGET_DESCRIBE]</input> read a more detailed description</nomouse>
+  <nopad><input>$cmd[CMD_LOOK_AROUND]$cmd[CMD_TARGET_DESCRIBE]</input> read a more detailed description</nopad></nomouse>
   <input>$cmd[CMD_PRIMARY_ATTACK]</input> fire held weapon
-  <input>$cmd[CMD_FIRE]$cmd[CMD_TARGET_SELECT]</input> fire quiver at pre-targeted monster
-  <input>shift-tab</input>, <input>p</input> fire quiver at closest monster
-  <input>$cmd[CMD_FIRE]$cmd[CMD_TARGET_CYCLE_FORWARD]</input> target another monster<localtiles>
+  <nopad><input>$cmd[CMD_FIRE]$cmd[CMD_TARGET_SELECT]</input></nopad><pad><input>$cmd[CMD_FIRE]</input>, then <input>$cmd[CMD_TARGET_SELECT]</input></pad> fire quiver at pre-targeted monster
+<nopad>  <input>shift-tab</input>, <input>p</input> fire quiver at closest monster
+</nopad>  <nopad><input>$cmd[CMD_FIRE]$cmd[CMD_TARGET_CYCLE_FORWARD]</input></nopad><pad><input>$cmd[CMD_FIRE]</input>, then <input>$cmd[CMD_TARGET_CYCLE_FORWARD]</input></pad> target another monster<localtiles>
   You can also fire a missile by <input>clicking</input> on it, then confirming the target with <input>Enter</input>.</localtiles>
 
 <yellow>Resting</yellow>
@@ -417,8 +435,8 @@ tutorial3 enter_shop
 #       shopping screen.
 To enter this shop, press <input>$cmd[CMD_GO_UPSTAIRS]</input><localtiles> or
 <input>click</input> on your character</localtiles>. To buy items,
-select them with their hotkey, hit <input>Enter</input> and confirm with
-<input>y</input>es. You can switch to description mode with <input>!</input>.
+select them with <nopad>their hotkey, hit <input>Enter</input> and confirm with
+<input>y</input>es. You can switch to description mode with <input>!</input>.</nopad><pad>the <input>D-pad</input> and <input>Cross</input>, and confirm with <input>Cross</input> on <w>Yes</w>.</pad>
 %%%%
 tutorial3 autoexplore_reminder
 
@@ -468,7 +486,7 @@ tutorial3 exit
   And of course, <input>mouseclicks</input> also work.</localtiles>
 
 <yellow>Other</yellow>
-  <input>$cmd[CMD_DISPLAY_COMMANDS]?</input> access the command help
+  <input>$cmd[CMD_DISPLAY_COMMANDS]<nopad>?</nopad></input> access the command help
   <input>$cmd[CMD_EXPLORE]</input>  explore automatically
   <input>$cmd[CMD_SEARCH_STASHES]</input> search for items/features previously seen<localtiles>
   Several of these commands can also be executed by clicking in the <w>command panel</w>.</localtiles>
@@ -498,13 +516,13 @@ To cast a spell, first memorise it with <input>$cmd[CMD_MEMORISE_SPELL]</input>.
 You can then cast it with <input>$cmd[CMD_CAST_SPELL]</input><localtiles> or by
 <input>clicking</input> on the spell tile</localtiles>.
 
-Press <input>$cmd[CMD_CAST_SPELL]</input>, then press <input>?</input> to get a
+Press <input>$cmd[CMD_CAST_SPELL]</input><nopad>, then press <input>?</input></nopad> to get a
 list of your spells.
 %%%%
 tutorial4 spellquivering
 Spells, like ammo, are shown in the quiver slot, so you can use
 <input>$cmd[CMD_QUIVER_ITEM]</input> to ready a spell in the quiver. Use
-<input>$cmd[CMD_FIRE]</input> or <input>shift-tab</input> to fire the currently
+<input>$cmd[CMD_FIRE]</input><nopad> or <input>shift-tab</input></nopad> to fire the currently
 quivered spell.
 
 Once you are out of magic points, retreat and rest to regain them with
@@ -648,21 +666,21 @@ tutorial5 altar
 
 You can pray on an altar with <input>$cmd[CMD_GO_DOWNSTAIRS]</input>
 <localtiles> (or by <input>left clicking</input> on your character)</localtiles>
-to get an idea what a god offers you, and to join the faith. If
+to get an idea what a god offers you, and to join the faith. <nopad>If
 you press <input>!</input><localtiles> or
 <input>rightclick</input></localtiles> on the religion screen, you can see a
 more detailed description.
 
-Confirm your choice with <input>J</input> or <input>Enter</input>.
+</nopad>Confirm your choice with <nopad><input>J</input> or <input>Enter</input></nopad><pad><input>Cross</input></pad>.
 %%%%
 tutorial5 religion
 
 Have a look at your current religious standing with
 <input>$cmd[CMD_DISPLAY_RELIGION]</input><localtiles> (or via the <w>religion
 button</w> in the command panel, or by <input>Shift-rightclicking</input> on
-the player tile)</localtiles>. Again, pressing <input>!</input><localtiles> or
+the player tile)</localtiles>. <nopad>Again, pressing <input>!</input><localtiles> or
 <input>rightclicking</input></localtiles> will bring up a more detailed
-description of your god.
+description of your god.</nopad>
 %%%%
 tutorial5 piety_on_kill
 
@@ -712,5 +730,5 @@ tutorial5 exit
 
 <yellow>Other commands</yellow>
   <input>$cmd[CMD_DISPLAY_OVERMAP]</input> display an overview of the dungeon
-  <input>$cmd[CMD_DISPLAY_COMMANDS]/</input>  search the description database
+  <nopad><input>$cmd[CMD_DISPLAY_COMMANDS]/</input></nopad><pad><input>$cmd[CMD_DISPLAY_COMMANDS]</input></pad>  search the description database
 %%%%

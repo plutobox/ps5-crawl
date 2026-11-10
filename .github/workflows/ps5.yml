@@ -102,21 +102,13 @@ jobs:
           name: crawl-ps5-payload-${{ env.CRAWL_VERSION }}
           path: dist/
 
-  # The native title (PS5_NATIVE=y): <TITLEID>.zip with eboot.bin, sce_sys/
-  # and assets/, the file the homebrew catalog installs. Built with the same
-  # pinned toolchain as ps5/package-native.sh expects in $HOME.
+  # The native title (PS5_NATIVE=y): <TITLEID>.zip with eboot.bin, sce_sys/,
+  # sce_module/ and assets/, the file the homebrew catalog installs. Built by
+  # crawl-ref/source/ps5/build_ps5.py, which pins everything it builds with.
   native:
     runs-on: ubuntu-latest
     permissions:
       contents: write # to publish the release on a version tag
-    env:
-      BOILERPLATE_REV: 4f531c4b517f80bcb6b1267135848168d2250047
-      PS5_OPENGL_REV: 6b6bb2039f741287ed7f1bc6bc4b2c589709a0ba
-      PS5_OPENGL_SDK_VERSION: 1.0.2
-      SDL_REV: 8c56053f13ca13a0c050de613706ff69eb615836
-      # mihawk-99's fork of the payload SDK: its platform layer supplies the
-      # C library functions a title lacks or is refused, and POSIX regex.
-      PS5_PLATFORM_REV: e105cf6f25801d9e9981812a89a3b74021d2d2a2
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -124,7 +116,7 @@ jobs:
           fetch-depth: 0
 
       - name: Checkout fonts submodule
-        # Every library is a PS5 build: PacBrew's, ps5-opengl's SDL2 and the
+        # Every library is a PS5 build: PacBrew's, ps5/sdl2's SDL2 and the
         # platform layer. Only the fonts come from contrib.
         run: git submodule update --init --depth 1 crawl-ref/source/contrib/fonts
 
@@ -132,9 +124,9 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y \
-            build-essential ccache clang-18 cmake curl git libclang-rt-18-dev \
+            build-essential clang-18 cmake curl git libclang-rt-18-dev \
             libpng-dev lld-18 llvm-18 ninja-build perl pkg-config python3 \
-            python3-yaml tar unzip wget zip
+            python3-yaml tar unzip zip
 
       - name: Choose the version
         # sce_sys/param.json is the committed copy the catalog reads; the
@@ -165,70 +157,25 @@ jobs:
           fi
           echo "CONTENT_VERSION=$version" >> "$GITHUB_ENV"
 
-      - name: Fetch native toolchain
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # Fetch each pinned commit by SHA: the boilerplate's is no longer on
-          # a branch (upstream main was rewritten), but GitHub still serves it.
-          fetch_rev() {
-            git init -q "$3"
-            git -C "$3" fetch -q --depth 1 "https://github.com/$1" "$2"
-            git -C "$3" checkout -q FETCH_HEAD
-          }
-          # The boilerplate's setup scripts download quietly (wget -q); retry
-          # them, as a dropped download fails with no message.
-          retry() {
-            for attempt in 1 2 3; do
-              "$@" && return 0
-              echo "::warning::attempt $attempt failed: $*"
-              sleep 10
-            done
-            return 1
-          }
-          fetch_rev drakmor/ps5-native-app-boilerplate "$BOILERPLATE_REV" "$HOME/ps5-native-app-boilerplate"
-          # The compiler wrapper is committed without its executable bit, and
-          # the SDL2 build runs it directly.
-          chmod +x "$HOME/ps5-native-app-boilerplate/tooling/prospero-clang18"
-          retry bash "$HOME/ps5-native-app-boilerplate/tools/setup-native-dependencies.sh"
-          # The boilerplate's pinned PacBrew release: SDL2_image, freetype,
-          # libpng, zlib, Lua and SQLite built for PS5.
-          retry bash "$HOME/ps5-native-app-boilerplate/tools/setup-pacbrew-dependencies.sh" --all
+      - name: Cache the dependencies
+        # ps5/.deps: build_ps5.py deps redoes any piece whose pin changed.
+        uses: actions/cache@v4
+        with:
+          path: crawl-ref/source/ps5/.deps
+          key: ps5-deps-${{ hashFiles('crawl-ref/source/ps5/build_ps5.py', 'crawl-ref/source/ps5/sdl2/**', 'crawl-ref/source/ps5/tooling/native/**') }}
+          restore-keys: ps5-deps-
 
-          fetch_rev mihawk-99/PS5_PayloadSDK "$PS5_PLATFORM_REV" "$HOME/ps5-platform-sdk"
-
-          fetch_rev darkxex/ps5-opengl "$PS5_OPENGL_REV" "$HOME/ps5-opengl"
-
-          mkdir -p "$HOME/ps5-opengl-sdk"
-          gh release download "v$PS5_OPENGL_SDK_VERSION" --repo darkxex/ps5-opengl \
-            --pattern "ps5-opengl-sdk-$PS5_OPENGL_SDK_VERSION.tar.gz" --dir "$RUNNER_TEMP"
-          tar -xzf "$RUNNER_TEMP/ps5-opengl-sdk-$PS5_OPENGL_SDK_VERSION.tar.gz" -C "$HOME/ps5-opengl-sdk"
-
-          fetch_rev ps5-payload-dev/SDL "$SDL_REV" "$RUNNER_TEMP/SDL"
-
-      - name: Build SDL2 for the native title
-        working-directory: /home/runner/ps5-opengl
-        run: |
-          python3 integration/SDL2/build.py native \
-            --sdl-source "$RUNNER_TEMP/SDL" \
-            --sdk-prefix "$HOME/ps5-opengl-sdk/ps5-opengl-sdk-$PS5_OPENGL_SDK_VERSION/sdk" \
-            --out build/sdl-native \
-            --payload-sdk "$HOME/ps5-native-app-boilerplate/.deps/native/ps5-payload-sdk" \
-            --compiler-wrapper "$HOME/ps5-native-app-boilerplate/tooling/prospero-clang18"
-
-      - name: Build the platform layer
-        # libps5platform.a, built against its own copy of the v0.42 SDK
-        # headers (the release the boilerplate's SDK is), where
-        # ps5/package-native.sh expects it.
-        run: make -C "$HOME/ps5-platform-sdk/platform" -j"$(nproc)"
+      - name: Fetch and build the dependencies
+        working-directory: crawl-ref/source
+        run: python3 ps5/build_ps5.py deps
 
       - name: Build and package the title
         working-directory: crawl-ref/source
         run: |
-          make -j"$(nproc)" PS5_NATIVE=y crawl-native.objs
-          bash ps5/package-native.sh --build
+          python3 ps5/build_ps5.py build
+          python3 ps5/build_ps5.py package
           mkdir -p "$GITHUB_WORKSPACE/dist"
-          cp "build-ps5/app/dist/$TITLE_ID.zip" "$GITHUB_WORKSPACE/dist/"
+          cp "ps5/dist/$TITLE_ID.zip" "$GITHUB_WORKSPACE/dist/"
           (cd "$GITHUB_WORKSPACE/dist" && sha256sum "$TITLE_ID.zip" | tee SHA256SUMS)
 
       - name: Upload artifact

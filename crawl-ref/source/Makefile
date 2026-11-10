@@ -223,22 +223,24 @@ ifdef PS5
 endif
 
 ifdef PS5_NATIVE
-	# A native PS5 title (eboot.bin) built with ps5-native-app-boilerplate's
-	# compiler and linked against ps5-opengl's statically linked OpenGL and
-	# SDL2. This builds crawl-native.objs (the game's objects);
-	# ps5/package-native.sh links them into the title. Game data is packaged
-	# in the title's assets/ (mounted at /app0/assets); saves need a
-	# writable location.
-	PS5_NATIVE_TEMPLATE ?= $(HOME)/ps5-native-app-boilerplate
-	PS5_NATIVE_SDK ?= $(PS5_NATIVE_TEMPLATE)/.deps/native/ps5-payload-sdk
-	PS5_SDL2_PREFIX ?= $(HOME)/ps5-opengl/build/sdl-native/sdk
-	# SDL2_image, freetype, libpng, Lua, SQLite and zlib are the PS5 builds
-	# from the boilerplate's pinned PacBrew release, which
-	# tools/setup-pacbrew-dependencies.sh installs.
-	PS5_PACBREW_PREFIX ?= $(PS5_NATIVE_TEMPLATE)/.deps/pacbrew/v0.40.2/sysroot/user/homebrew
+	# A native PS5 title. `make PS5_NATIVE=y` links the game into the
+	# intermediate PIE (crawl) with ps5/tooling/ps5-cc, and
+	# `ps5/build_ps5.py package` makes eboot.bin and the title folder from
+	# it (see ps5/README.md). Everything it builds with comes from
+	# `ps5/build_ps5.py deps`, pinned, in PS5_DEPS. Game data is packaged in
+	# the title's assets/ (mounted at /app0/assets).
+	PS5_DEPS ?= $(CURDIR)/ps5/.deps
+	PS5_NATIVE_SDK ?= $(PS5_DEPS)/ps5-payload-sdk
+	PS5_OPENGL_PREFIX ?= $(PS5_DEPS)/ps5-opengl-sdk
+	PS5_SDL2_PREFIX ?= $(PS5_DEPS)/sdl2
+	PS5_PACBREW_PREFIX ?= $(PS5_DEPS)/pacbrew/user/homebrew
+	PS5_PLATFORM_PREFIX ?= $(PS5_DEPS)/ps5-platform
 	CROSSHOST := x86_64-sie-ps5
 	TILES := y
 	GL_CORE := y
+	# Sound through PacBrew's SDL2_mixer, played by SDL's PS5 audio driver
+	# (sceAudioOut), which ps5/sdl2 builds in.
+	SOUND := y
 	# POSIX regex, which the title's C library lacks: package-native.sh binds
 	# regcomp and its family to mihawk-99's platform layer (musl's TRE).
 	COPY_FONTS := y
@@ -603,7 +605,8 @@ STRIP := $(PS5_PAYLOAD_SDK)/bin/prospero-strip
 endif
 
 ifdef PS5_NATIVE
-GCC := env PS5_PAYLOAD_SDK=$(PS5_NATIVE_SDK) sh $(PS5_NATIVE_TEMPLATE)/tooling/prospero-clang18
+GCC := env PS5_PAYLOAD_SDK=$(PS5_NATIVE_SDK) PS5_RT_DIR=$(CURDIR)/ps5/build/rt \
+       bash $(CURDIR)/ps5/tooling/ps5-cc
 GXX := $(GCC)
 AR := llvm-ar-18
 RANLIB := llvm-ranlib-18
@@ -611,7 +614,7 @@ STRIP := true
 CFOTHERS += -D__PROSPERO__ -DUSE_PS5_NATIVE -fPIC -ffunction-sections -fdata-sections
 # The PS5 target defaults to neither; the SDK has libunwind and libc++abi.
 CFOTHERS += -fexceptions -fcxx-exceptions -frtti
-# ps5-opengl's SDL2 headers come first: PacBrew's include/SDL2 also holds
+# ps5/sdl2's SDL2 headers come first: PacBrew's include/SDL2 also holds
 # its own SDL2's headers, and only SDL_image.h is wanted from it.
 INCLUDES_L += -isystem $(PS5_SDL2_PREFIX)/include/SDL2 \
               -isystem $(PS5_SDL2_PREFIX)/include \
@@ -665,8 +668,11 @@ endif
 
 # To get stack trace symbols.
 # Note that Msys, MinGW, ICC, and Cygwin don't support -rdynamic.
+# Nor does a native PS5 title, which has no symbol table to give.
+ifndef PS5_NATIVE
 ifeq (,$(shell echo 'int main(){return 1;}'|$(GXX) -x c++ - -o /dev/null -rdynamic 2>&1))
   LDFLAGS += -rdynamic
+endif
 endif
 
 # Okay, we have to assume we're on something else that
@@ -1354,6 +1360,26 @@ endif
 
 LIBS += $(CONTRIB_LIBS) $(EXTRA_LIBS)
 
+ifdef PS5_NATIVE
+# The title links exactly these PS5 builds: PacBrew's SDL2_mixer (with its
+# ogg, mp3 and flac decoders), SDL2_image (with the WebP it was built with),
+# freetype (with bzip2), libpng, zlib, Lua and SQLite; the platform layer;
+# ps5/sdl2's SDL2 and the OpenGL SDK. ps5/tooling/ps5-link.py adds the C++
+# runtime and the system modules' stubs.
+# SDL2 by its path: PacBrew has a libSDL2.a of its own (with a keyboard
+# driver a title can't load).
+LIBS := -L$(PS5_PACBREW_PREFIX)/lib -L$(PS5_PLATFORM_PREFIX)/lib \
+        -L$(PS5_OPENGL_PREFIX)/lib \
+        -lSDL2_mixer -lSDL2_image -lwebpdemux -lwebp -lsharpyuv -lfreetype \
+        -lbz2 -lpng16 -lz -llua -lsqlite3 -lps5platform \
+        $(PS5_SDL2_PREFIX)/lib/libSDL2.a -lPS5OpenGLCore33
+# The port's own code (ps5/app): the process entry and exit, the system's
+# on-screen keyboard, and a few C library functions.
+PS5_APP_OBJECTS := ps5/app/ps5_entry.o ps5/app/ime.o ps5/app/native_shims.o
+EXTRA_OBJECTS += $(PS5_APP_OBJECTS)
+LDFLAGS += -Wl,--wrap=main -Wl,--wrap=exit -Wl,--defsym=lstat=crawl_ps5_lstat
+endif
+
 
 ifdef ANDROID
 CFLAGS   := $(CFOPTIMIZE) $(CFOTHERS) $(CFWARN) $(CFLAGS)
@@ -1661,6 +1687,10 @@ ifdef ANDROID
   shareddir_fp =
 endif
 
+ifdef PS5_NATIVE
+# The in-game help reads these generated files and aborts without them.
+install-data: $(DOC_BASE)/aptitudes.txt $(DOC_BASE)/crawl_manual.txt $(DOC_BASE)/quickstart.txt
+endif
 install-data: $(GENERATED_FILES)
 ifeq ($(DESTDIR)$(prefix)$(ANDROID),)
 	@echo Neither "DESTDIR" nor "prefix" defined -- nowhere to install to, aborting.
@@ -1803,16 +1833,13 @@ distclean: clean clean-contrib clean-rltiles
 $(GAME): $(GAME_OBJS) $(CONTRIB_LIBS) dat/dlua/tags.lua
 	+$(QUIET_LINK)$(CXX) $(LDFLAGS) $(GAME_OBJS) -o $(GAME) $(LIBS)
 
-# PS5 native title: the game's objects, linked into eboot.bin by
-# ps5/package-native.sh together with the contrib libraries.
-crawl-native.a: $(GAME_OBJS) $(CONTRIB_LIBS) dat/dlua/tags.lua
-	$(RM) $@
-	$(AR) rcs $@ $(GAME_OBJS)
-
-# Every object is linked, not just the ones main() pulls in from the archive,
-# so the list is passed to the linker as well.
-crawl-native.objs: crawl-native.a
-	@printf '%s\n' $(abspath $(GAME_OBJS)) > $@
+ifdef PS5_NATIVE
+# The port's C code (ps5/app), compiled as C, not with the game's C++ flags.
+ps5/app/%.o: ps5/app/%.c .cflags
+	$(QUIET_CC)$(CC) -std=c11 -O2 -Wall -Wextra -fPIC -ffunction-sections \
+	    -fdata-sections -D__PROSPERO__ -MMD -c $< -o $@
+-include $(PS5_APP_OBJECTS:%.o=%.d)
+endif
 
 util/monster/vault_monster_data.h: dat/des util/gather_mons
 	util/gather_mons -v > $@

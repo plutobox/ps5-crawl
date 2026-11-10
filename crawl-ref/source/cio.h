@@ -81,6 +81,10 @@ int cancellable_get_line(char *buf,
 // -1: the keyboard can't open, so read keys instead.
 int ps5_text_input(const string &prompt, const string &fill, char *buf,
                    int len);
+
+// The controller button that sends a key in the dungeon ("Square", "L1"...),
+// or "" (windowmanager-sdl.cc).
+string ps5_pad_button_for_key(int key);
 #endif
 
 // Do not use this templated function directly. Use the macro below instead.

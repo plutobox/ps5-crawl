@@ -75,6 +75,10 @@ using namespace ui;
 static void _loading_message(string m)
 {
     mpr(m.c_str());
+#ifdef USE_PS5_NATIVE
+    // The title's log is the only way to see where a start-up stalls.
+    printf("[crawl] %s\n", m.c_str());
+#endif
 #ifdef USE_TILE_LOCAL
     loading_screen_update_msg(m.c_str());
 #endif

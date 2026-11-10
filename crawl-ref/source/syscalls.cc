@@ -93,6 +93,11 @@ bool lock_file(int fd, bool write, bool wait)
                         (write ? LOCKFILE_EXCLUSIVE_LOCK : 0) |
                         (wait ? 0 : LOCKFILE_FAIL_IMMEDIATELY),
                         0, -1, -1, &pos);
+#elif defined(USE_PS5_NATIVE)
+    // A title is the only process using its files, and a blocking fcntl
+    // lock that is never released would hang start-up (map cache).
+    (void) fd; (void) write; (void) wait;
+    return true;
 #else
     struct flock fl;
     fl.l_type = write ? F_WRLCK : F_RDLCK;
@@ -108,6 +113,9 @@ bool unlock_file(int fd)
 {
 #ifdef TARGET_OS_WINDOWS
     return !!UnlockFile((HANDLE)_get_osfhandle(fd), 0, 0, -1, -1);
+#elif defined(USE_PS5_NATIVE)
+    (void) fd;
+    return true;
 #else
     struct flock fl;
     fl.l_type = F_UNLCK;

@@ -24,6 +24,11 @@
 # endif
 #endif
 
+#ifdef PS5_DEBUG_INPUT
+# include <cstdio>
+# include <deque>
+#endif
+
 #include "cio.h"
 #include "env.h"
 #include "files.h"
@@ -999,9 +1004,8 @@ enum class pad_mode
     other,   // targeting, the level map, and other prompts
 };
 
-Uint32 pad_repeat_event_type = (Uint32)-1;
-SDL_TimerID pad_repeat_timer = 0;
 int pad_repeat_key = 0;   // direction key repeating while held, or 0
+Uint32 pad_repeat_next = 0; // SDL_GetTicks() of its next repeat
 int pad_dpad_key = 0;     // direction held on the d-pad, or 0
 int pad_dpad_button = -1; // the d-pad button producing pad_dpad_key
 int pad_stick_key = 0;    // direction held on the left stick, or 0
@@ -1076,6 +1080,37 @@ int _pad_button_key(Uint8 button)
     }
 }
 
+#ifdef USE_PS5_NATIVE
+} // namespace
+
+// The controller button that sends `key` while the game waits for a command,
+// by the PlayStation name (e.g. "Square"), or "" if none does. Keep it in step
+// with _pad_button_key() and the triggers in wait_event().
+string ps5_pad_button_for_key(int key)
+{
+    switch (key)
+    {
+    case '>': case '<': case 'g':
+        return "Cross";
+    case 'z':    return "Square";
+    case 'i':    return "Triangle";
+    case 's':    return "L1";
+    case 'f':    return "R1";
+    case 'x':    return "L3";
+    case '5':    return "R3";
+    case 'a':    return "Create";
+    case '~':    return "Options";
+    case 'X':    return "Touchpad";
+    case 'o':    return "L2";
+    case CK_TAB: return "R2";
+    default:     return "";
+    }
+}
+
+namespace
+{
+#endif
+
 // The key for a direction; dx and dy are -1, 0 or 1. Diagonals use the
 // keypad keys, which move diagonally in the dungeon, targeting and the map.
 int _pad_direction_key(int dx, int dy)
@@ -1130,34 +1165,43 @@ int _pad_stick_key(SDL_GameController *pad)
     return _pad_direction_key(dx, dy);
 }
 
-Uint32 _pad_repeat_callback(Uint32 interval, void *param)
-{
-    UNUSED(param);
-    SDL_Event event;
-    SDL_zero(event);
-    event.type = pad_repeat_event_type;
-    SDL_PushEvent(&event);
-    return interval == PAD_REPEAT_DELAY_MS ? PAD_REPEAT_RATE_MS : interval;
-}
+int _pad_key_event(wm_event *event, int key);
 
+// A held direction repeats from wait_event(), not from a timer: a timer
+// thread's event can queue up behind a slow frame, ahead of the release, and
+// one press then moves twice. Each repeat is sent only once every queued
+// event has been read, so a release is always seen first.
 void _pad_stop_repeat()
 {
-    if (pad_repeat_timer)
-        SDL_RemoveTimer(pad_repeat_timer);
-    pad_repeat_timer = 0;
     pad_repeat_key = 0;
 }
 
 void _pad_start_repeat(int key)
 {
-    _pad_stop_repeat();
-    if (pad_repeat_event_type == (Uint32)-1)
-        pad_repeat_event_type = SDL_RegisterEvents(1);
-    if (pad_repeat_event_type == (Uint32)-1)
-        return;
     pad_repeat_key = key;
-    pad_repeat_timer = SDL_AddTimer(PAD_REPEAT_DELAY_MS, _pad_repeat_callback,
-                                    nullptr);
+    pad_repeat_next = SDL_GetTicks() + PAD_REPEAT_DELAY_MS;
+}
+
+// Milliseconds until the held direction's next repeat (0 if it is due), or
+// INT_MAX with none held.
+int _pad_repeat_wait()
+{
+    if (!pad_repeat_key)
+        return INT_MAX;
+    const Sint32 left = (Sint32) (pad_repeat_next - SDL_GetTicks());
+    return left > 0 ? left : 0;
+}
+
+// Send the held direction again if it is due and nothing else is waiting.
+int _pad_repeat_due(wm_event *event)
+{
+    if (_pad_repeat_wait() > 0)
+        return 0;
+    SDL_PumpEvents();
+    if (SDL_HasEvents(SDL_FIRSTEVENT, SDL_LASTEVENT))
+        return 0;
+    pad_repeat_next = SDL_GetTicks() + PAD_REPEAT_RATE_MS;
+    return _pad_key_event(event, pad_repeat_key);
 }
 
 // Fill in a key press. Returns 1 if there is one to deliver.
@@ -1173,6 +1217,105 @@ int _pad_key_event(wm_event *event, int key)
     event->key.keysym.sym = key;
     return 1;
 }
+
+#ifdef PS5_DEBUG_INPUT
+// Debug builds: type the contents of /data/crawl-input.txt, then delete it,
+// so the title can be driven over FTP. "\n" is Enter, and ^ escapes the
+// controller: ^X Cross, ^[ Circle, ^S Square, ^T Triangle, ^O Options,
+// ^C Create, ^P the touchpad, ^U ^D ^L ^R the d-pad, ^1 ^2 L1 and R1,
+// ^3 ^4 L2 and R2, ^5 ^6 L3 and R3, ^^ a caret. A button is turned into a
+// key when it is delivered, so it does what it would for the screen then.
+const char *PS5_INPUT_FILE = "/data/crawl-input.txt";
+const int PAD_BUTTON_BASE = -100000; // queued button: PAD_BUTTON_BASE - button
+deque<int> debug_keys;
+Uint32 debug_next_check = 0;
+
+void _debug_read_input()
+{
+    if (!SDL_TICKS_PASSED(SDL_GetTicks(), debug_next_check))
+        return;
+    debug_next_check = SDL_GetTicks() + 500;
+    FILE *f = fopen(PS5_INPUT_FILE, "rb");
+    if (!f)
+        return;
+    string text;
+    char chunk[512];
+    size_t got;
+    while ((got = fread(chunk, 1, sizeof chunk, f)) > 0)
+        text.append(chunk, got);
+    fclose(f);
+    remove(PS5_INPUT_FILE);
+    printf("debug input: %u bytes\n", (unsigned) text.size());
+
+    for (size_t i = 0; i < text.size(); i++)
+    {
+        const char c = text[i];
+        if (c == '\r')
+            continue;
+        if (c == '\n')
+        {
+            debug_keys.push_back(CK_ENTER);
+            continue;
+        }
+        if (c != '^' || i + 1 >= text.size())
+        {
+            debug_keys.push_back((unsigned char) c);
+            continue;
+        }
+        int button = -1, key = 0;
+        switch (text[++i])
+        {
+        case 'X': button = SDL_CONTROLLER_BUTTON_A; break;
+        case '[': button = SDL_CONTROLLER_BUTTON_B; break;
+        case 'S': button = SDL_CONTROLLER_BUTTON_X; break;
+        case 'T': button = SDL_CONTROLLER_BUTTON_Y; break;
+        case 'O': button = SDL_CONTROLLER_BUTTON_START; break;
+        case 'C': button = SDL_CONTROLLER_BUTTON_BACK; break;
+#if SDL_VERSION_ATLEAST(2, 0, 14)
+        case 'P': button = SDL_CONTROLLER_BUTTON_TOUCHPAD; break;
+#endif
+        case '1': button = SDL_CONTROLLER_BUTTON_LEFTSHOULDER; break;
+        case '2': button = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER; break;
+        case '5': button = SDL_CONTROLLER_BUTTON_LEFTSTICK; break;
+        case '6': button = SDL_CONTROLLER_BUTTON_RIGHTSTICK; break;
+        // The triggers act only in the dungeon (see the axis handling).
+        case '3': key = 'o'; break;
+        case '4': key = CK_TAB; break;
+        case 'U': key = PAD_BUTTON_BASE - SDL_CONTROLLER_BUTTON_DPAD_UP; break;
+        case 'D': key = PAD_BUTTON_BASE - SDL_CONTROLLER_BUTTON_DPAD_DOWN; break;
+        case 'L': key = PAD_BUTTON_BASE - SDL_CONTROLLER_BUTTON_DPAD_LEFT; break;
+        case 'R': key = PAD_BUTTON_BASE - SDL_CONTROLLER_BUTTON_DPAD_RIGHT; break;
+        case '^': key = '^'; break;
+        default: break;
+        }
+        if (button >= 0)
+            key = PAD_BUTTON_BASE - button;
+        if (key)
+            debug_keys.push_back(key);
+    }
+}
+
+// The next queued key as a key press; 0 if there is none.
+int _debug_key_event(wm_event *event)
+{
+    _debug_read_input();
+    while (!debug_keys.empty())
+    {
+        int key = debug_keys.front();
+        debug_keys.pop_front();
+        if (key <= PAD_BUTTON_BASE)
+        {
+            const Uint8 button = (Uint8) (PAD_BUTTON_BASE - key);
+            int dx, dy;
+            key = _pad_dpad_direction(button, dx, dy)
+                  ? _pad_direction_key(dx, dy) : _pad_button_key(button);
+        }
+        if (key)
+            return _pad_key_event(event, key);
+    }
+    return 0;
+}
+#endif
 
 // A direction input changed: send the new direction (if any) and repeat it
 // while it is held.
@@ -1253,7 +1396,15 @@ static int _handle_controller_event(const SDL_Event &sdlevent, wm_event *event)
             if (held == pad_trigger_held[right])
                 return 0;
             pad_trigger_held[right] = held;
-            if (!held || _pad_mode() != pad_mode::command)
+            const pad_mode mode = _pad_mode();
+            if (!held || mode == pad_mode::menu)
+                return 0;
+#ifdef USE_PS5_NATIVE
+            // While aiming, the triggers cycle through the targets.
+            if (mode == pad_mode::other)
+                return _pad_key_event(event, right ? '+' : '-');
+#endif
+            if (mode != pad_mode::command)
                 return 0;
             return _pad_key_event(event, right ? int{CK_TAB} : 'o');
         }
@@ -1261,8 +1412,6 @@ static int _handle_controller_event(const SDL_Event &sdlevent, wm_event *event)
     }
 
     default:
-        if (sdlevent.type == pad_repeat_event_type && pad_repeat_key)
-            return _pad_key_event(event, pad_repeat_key);
         return 0;
     }
 }
@@ -1281,8 +1430,27 @@ int SDLWrapper::wait_event(wm_event *event, int timeout)
         // event below.
     }
 
-    if (!SDL_WaitEventTimeout(&sdlevent, timeout))
-        return 0;
+    // Wait no longer than until a held direction repeats (and, in debug
+    // builds, in short slices, so keys typed from the file arrive).
+    for (int waited = 0;;)
+    {
+#ifdef PS5_DEBUG_INPUT
+        if (_debug_key_event(event))
+            return 1;
+#endif
+        if (_pad_repeat_due(event))
+            return 1;
+        int slice = max(timeout - waited, 0);
+        slice = min(slice, _pad_repeat_wait());
+#ifdef PS5_DEBUG_INPUT
+        slice = min(slice, 250);
+#endif
+        if (SDL_WaitEventTimeout(&sdlevent, slice))
+            break;
+        waited += slice;
+        if (waited >= timeout)
+            return 0;
+    }
 
     if (sdlevent.type != SDL_TEXTINPUT)
         prev_keycode = 0;
@@ -1357,6 +1525,9 @@ int SDLWrapper::wait_event(wm_event *event, int timeout)
 
     // I leave these as the same, because the original tilesdl does, too
     case SDL_USEREVENT:
+        // A timer's callback; one with none would be called at address 0.
+        if (!sdlevent.user.data1)
+            return 0;
         event->type = WME_CUSTOMEVENT;
         event->custom.code = sdlevent.user.code;
         event->custom.data1 = sdlevent.user.data1;

@@ -1,0 +1,5 @@
+# downloaded and built dependencies, build output and the title (build_ps5.py)
+.deps/
+build/
+dist/
+__pycache__/

@@ -8,9 +8,6 @@
 #include "end.h"
 
 #include <cerrno>
-#ifdef USE_PS5_NATIVE
-extern "C" int sceKernelUsleep(unsigned int microseconds);
-#endif
 
 #include "abyss.h"
 #include "chardump.h"
@@ -211,16 +208,9 @@ NORETURN void end(int exit_code, bool print_error, const char *format, ...)
     delete real_Options;     real_Options = 0;
 #endif
 
-#ifdef USE_PS5_NATIVE
-    // A native PS5 title may not exit: exit() raises SIGSYS. Crawl has shut
-    // down, so wait for the player to close the title from the home screen.
-    printf("Crawl has exited (code %d); close it from the home screen.\n",
-           exit_code);
-    for (;;)
-        sceKernelUsleep(1000000);
-#else
+    // On the PS5 the link wraps exit() (ps5/app/ps5_entry.c): it closes the
+    // title, as a title can't exit.
     exit(exit_code);
-#endif
 }
 
 // Delete save files on game end.

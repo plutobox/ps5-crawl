@@ -2306,6 +2306,84 @@ void base_game_options::merge(const base_game_options &other)
 }
 
 
+#if defined(USE_PS5_NATIVE) && defined(USE_SOUND)
+// Where the PS5 title looks for a sound pack: a folder holding the pack's
+// init.txt, as the pack's zip unpacks.
+static const char *PS5_SOUND_PACK_DIRS[] = { "/data/crawl/sound-pack/" };
+
+// Sound packs are written for the WebTiles sound module
+// (refracta/dcss-webtiles-extension-module, modules/sound-support), which
+// reads "sound ^= regex:file" itself: split at the first ':', never at a
+// comma (Crawl's list options split "a, b" in two), and the first matching
+// line wins (Crawl's ^= would put each new line first). Its other lines are
+// ordinary options.
+static void _ps5_read_sound_pack(const string &dir, const string &init,
+                                 bool runscripts)
+{
+    FileLineInput f(init.c_str());
+    vector<sound_mapping> mappings;
+    unsigned fixed = 0;
+    while (!f.eof())
+    {
+        string line = f.get_line();
+        trim_string(line);
+        string value;
+        if (starts_with(line, "sound ^=") || starts_with(line, "sound +="))
+            value = line.substr(8);
+        else if (starts_with(line, "sound ="))
+            value = line.substr(7);
+        else
+        {
+            if (!line.empty() && line[0] != '#')
+                Options.read_option_line(line, runscripts);
+            continue;
+        }
+        trim_string(value);
+        if (value.find(':') == string::npos)
+        {
+            printf("Sound pack: no file in '%s'\n", line.c_str());
+            continue;
+        }
+        sound_mapping m(value);
+        // A few lines name a file without its extension.
+        trim_string(m.soundfile);
+        const string base = catpath(dir, catpath(Options.sound_file_path,
+                                                 m.soundfile));
+        if (!file_exists(base))
+        {
+            for (const char *ext : { ".mp3", ".ogg", ".wav", ".flac" })
+                if (file_exists(base + ext))
+                {
+                    m.soundfile += ext;
+                    fixed++;
+                    break;
+                }
+        }
+        mappings.push_back(m);
+    }
+    Options.sound_mappings.insert(Options.sound_mappings.begin(),
+                                  mappings.begin(), mappings.end());
+    printf("Sound pack: %s (%u sounds, %u without an extension)\n",
+           init.c_str(), (unsigned) mappings.size(), fixed);
+}
+
+static void _ps5_load_sound_pack(bool runscripts)
+{
+    for (const char *dir : PS5_SOUND_PACK_DIRS)
+    {
+        const string init = catpath(dir, "init.txt");
+        if (!file_exists(init))
+            continue;
+        Options.sound_file_path.clear();
+        _ps5_read_sound_pack(dir, init, runscripts);
+        // A pack's own sound_file_path is relative to its folder.
+        Options.sound_file_path = catpath(dir, Options.sound_file_path);
+        return;
+    }
+    printf("No sound pack in %s\n", PS5_SOUND_PACK_DIRS[0]);
+}
+#endif
+
 void read_init_file(bool runscripts)
 {
     unwind_bool parsing_state(crawl_state.parsing_rc, true);
@@ -2334,6 +2412,13 @@ void read_init_file(bool runscripts)
     // save the default state for everything
     // TODO: handle lua options here
     get_default_options() = Options;
+
+#if defined(USE_PS5_NATIVE) && defined(USE_SOUND)
+    // A sound pack in Crawl's own format (an init.txt of "sound ^=
+    // regex:file" lines beside its files), unzipped on the console. Before
+    // init.txt, so the player's options still win (sounds_on = false).
+    _ps5_load_sound_pack(runscripts);
+#endif
 
     // Load early binding extra options from the command line BEFORE init.txt.
     Options.filename     = "extra opts first";

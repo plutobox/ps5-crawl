@@ -446,7 +446,7 @@ static help_file help_files[] =
     { "quickstart.txt",     '^', false },
     { "macros_guide.txt",  '~', false },
     { "options_guide.txt", '&', false },
-#ifdef USE_TILE_LOCAL
+#if defined(USE_TILE_LOCAL) && !defined(USE_PS5_NATIVE)
     { "tiles_help.txt",    't', false },
 #endif
     { nullptr, 0, false }
@@ -503,6 +503,215 @@ static void _handle_FAQ()
 }
 
 ////////////////////////////////////////////////////////////////////////////
+
+#ifdef USE_PS5_NATIVE
+// ---------------------------------------------------------------------------
+// The controller: help page, command menu and the button names the tutorial
+// uses. The buttons themselves are in windowmanager-sdl.cc.
+
+struct pad_command
+{
+    command_type cmd;
+    const char *name;
+};
+
+struct pad_command_group
+{
+    const char *title;
+    vector<pad_command> commands;
+};
+
+// What a keyboard player can do that the buttons don't reach directly.
+// Options > All commands lists these.
+static const vector<pad_command_group> &_pad_command_groups()
+{
+    static const vector<pad_command_group> groups =
+    {
+        { "Items", {
+            { CMD_DISPLAY_INVENTORY, "Inventory" },
+            { CMD_WIELD_WEAPON, "Wield a weapon" },
+            { CMD_WEAPON_SWAP, "Swap to the other weapon" },
+            { CMD_WEAR_ARMOUR, "Wear armour" },
+            { CMD_REMOVE_ARMOUR, "Take off armour" },
+            { CMD_WEAR_JEWELLERY, "Put on jewellery" },
+            { CMD_REMOVE_JEWELLERY, "Remove jewellery" },
+            { CMD_QUAFF, "Drink a potion" },
+            { CMD_READ, "Read a scroll" },
+            { CMD_EVOKE, "Evoke a wand or device" },
+            { CMD_FIRE, "Fire or throw" },
+            { CMD_PICKUP, "Pick up" },
+            { CMD_DROP, "Drop" },
+            { CMD_DROP_LAST, "Drop what you just picked up" },
+            { CMD_EQUIP, "Wield, wear or put on" },
+            { CMD_UNEQUIP, "Unwield, take off or remove" },
+            { CMD_QUIVER_ITEM, "Choose what to fire" },
+            { CMD_ADJUST_INVENTORY, "Change an item's letter" },
+        } },
+        { "Magic and abilities", {
+            { CMD_CAST_SPELL, "Cast a spell" },
+            { CMD_MEMORISE_SPELL, "Memorise a spell" },
+            { CMD_DISPLAY_SPELLS, "List your spells" },
+            { CMD_USE_ABILITY, "Use an ability" },
+            { CMD_SHOUT, "Shout" },
+        } },
+        { "Moving", {
+            { CMD_EXPLORE, "Explore" },
+            { CMD_INTERLEVEL_TRAVEL, "Travel to a level or place" },
+            { CMD_SEARCH_STASHES, "Search for items in the dungeon" },
+            { CMD_REST, "Rest" },
+            { CMD_WAIT, "Wait a turn" },
+            { CMD_AUTOFIGHT, "Attack the nearest monster" },
+            { CMD_GO_DOWNSTAIRS, "Go down the stairs" },
+            { CMD_GO_UPSTAIRS, "Go up the stairs" },
+            { CMD_OPEN_DOOR, "Open a door" },
+            { CMD_CLOSE_DOOR, "Close a door" },
+            { CMD_LOOK_AROUND, "Look around" },
+            { CMD_DISPLAY_MAP, "Map of the level" },
+        } },
+        { "Information", {
+            { CMD_RESISTS_SCREEN, "Character overview" },
+            { CMD_DISPLAY_CHARACTER_STATUS, "Status effects" },
+            { CMD_DISPLAY_SKILLS, "Skills" },
+            { CMD_DISPLAY_RELIGION, "Religion" },
+            { CMD_DISPLAY_MUTATIONS, "Mutations" },
+            { CMD_DISPLAY_OVERMAP, "Dungeon overview" },
+            { CMD_DISPLAY_KNOWN_OBJECTS, "Known items" },
+            { CMD_DISPLAY_RUNES, "Runes" },
+            { CMD_LIST_GOLD, "Gold and shops" },
+            { CMD_REPLAY_MESSAGES, "Previous messages" },
+            { CMD_CHARACTER_DUMP, "Character dump" },
+            { CMD_DISPLAY_COMMANDS, "Help" },
+            { CMD_SAVE_GAME, "Save and exit" },
+        } },
+    };
+    return groups;
+}
+
+// The button that does `cmd` while the game waits for a command, e.g.
+// "Square", or "" if none does.
+string ps5_pad_label_for_command(command_type cmd)
+{
+    for (int key : command_to_keys(cmd))
+    {
+        string button = ps5_pad_button_for_key(key);
+        if (key == '\t') // the Tab binding of autofight
+            button = "R2";
+        if (!button.empty())
+            return button;
+    }
+    return "";
+}
+
+// How the tutorial names a command: its button, or where to find it.
+string ps5_pad_command_text(command_type cmd)
+{
+    switch (cmd)
+    {
+    case CMD_DISPLAY_COMMANDS:     return "Options, Help and manual";
+    // While aiming (looking around, firing, casting):
+    case CMD_TARGET_SELECT:        return "Cross";
+    case CMD_TARGET_CYCLE_FORWARD: return "R2";
+    case CMD_TARGET_CYCLE_BACK:    return "L2";
+    default: break;
+    }
+    const string button = ps5_pad_label_for_command(cmd);
+    if (!button.empty())
+        return button;
+    for (const auto &group : _pad_command_groups())
+        for (const auto &entry : group.commands)
+            if (entry.cmd == cmd)
+                return string("Options, All commands, ") + entry.name;
+    return command_to_string(cmd);
+}
+
+// Options > All commands: pick any command by name. True with the one chosen.
+bool ps5_choose_command(command_type &chosen)
+{
+    Menu menu(MF_SINGLESELECT | MF_ALLOW_FORMATTING | MF_ARROWS_SELECT
+              | MF_WRAP | MF_INIT_HOVER);
+    menu.set_tag("all_commands");
+    menu.set_title(new MenuEntry("<w>All commands</w>", MEL_TITLE));
+    menu.action_cycle = Menu::CYCLE_NONE;
+    menu.menu_action = Menu::ACT_EXECUTE;
+
+    for (const auto &group : _pad_command_groups())
+    {
+        menu.add_entry(new MenuEntry(group.title, MEL_SUBTITLE));
+        for (const auto &entry : group.commands)
+        {
+            string label = entry.name;
+            const string button = ps5_pad_label_for_command(entry.cmd);
+            if (!button.empty())
+                label += "  <darkgrey>(" + button + ")</darkgrey>";
+            // No letters to press: the cursor and Cross choose.
+            auto *item = new MenuEntry(label, MEL_ITEM, 1, 0);
+            item->data = reinterpret_cast<void *>(
+                static_cast<intptr_t>(entry.cmd));
+            menu.add_entry(item);
+        }
+    }
+
+    const vector<MenuEntry *> selected = menu.show();
+    if (selected.empty())
+        return false;
+    chosen = static_cast<command_type>(
+        reinterpret_cast<intptr_t>(selected[0]->data));
+    return true;
+}
+
+static void _add_formatted_pad_help(column_composer &cols)
+{
+    cols.add_formatted(
+        0,
+        "<h>Controller\n"
+        "\n"
+        "<w>D-pad, left stick</w> : move, attack\n"
+        "<w>Cross</w>     : use the stairs, pick up\n"
+        "<w>Circle</w>    : cancel, go back\n"
+        "<w>Triangle</w>  : inventory - pick an item\n"
+        "             to wield, wear, drink...\n"
+        "<w>Square</w>    : cast a spell\n"
+        "<w>R1</w>        : fire at the nearest target\n"
+        "<w>L1</w>        : wait a turn\n"
+        "<w>R3</w>        : rest until healed\n"
+        "<w>L2</w>        : explore automatically\n"
+        "<w>R2</w>        : attack the nearest monster\n"
+        "<w>L3</w>        : look around\n"
+        "<w>Create</w>    : use an ability\n"
+        "<w>Touchpad</w>  : map of the level\n"
+        "<w>Options</w>   : game menu\n"
+        "\n"
+        "Anything else is under <w>Options</w>,\n"
+        "<w>All commands</w>: wear armour, read,\n"
+        "travel, skills...\n",
+        false);
+
+    cols.add_formatted(
+        1,
+        "<h>Menus\n"
+        "\n"
+        "<w>D-pad up, down</w> : move the cursor\n"
+        "<w>Cross</w>          : choose\n"
+        "<w>Circle</w>         : back\n"
+        "<w>L1, R1</w>         : page up, down\n"
+        "<w>Square</w>         : type text\n"
+        "                  (on-screen keyboard)\n"
+        "\n"
+        "<h>Aiming and looking\n"
+        "\n"
+        "<w>D-pad, stick</w>   : move the cursor\n"
+        "<w>L2, R2</w>         : previous, next target\n"
+        "<w>Cross, R1</w>      : fire, confirm\n"
+        "<w>Circle</w>         : cancel\n"
+        "\n"
+        "<h>This help\n"
+        "\n"
+        "<w>D-pad left, right</w> : other pages\n"
+        "<w>D-pad up, down</w>    : scroll\n"
+        "<w>Circle</w>            : close\n",
+        false);
+}
+#endif
 
 int show_keyhelp_menu(const vector<formatted_string> &lines)
 {
@@ -1353,6 +1562,15 @@ static int _get_help_section(int section, formatted_string &header_out, formatte
                                         "------------------------------") == buf;
             }
             trim_string_right(text.ops.back().text);
+#ifdef USE_PS5_NATIVE
+            {
+                formatted_string nav = formatted_string::parse_string(
+                    "<darkgrey>D-pad left, right: other pages. "
+                    "Up, down, L1, R1: scroll. Circle: close.</darkgrey>\n\n");
+                nav += text;
+                text = nav;
+            }
+#endif
             page_text[help_files[i].hotkey] = text;
         }
     }
@@ -1367,6 +1585,10 @@ static int _get_help_section(int section, formatted_string &header_out, formatte
     switch (section)
     {
         case '?':
+#ifdef USE_PS5_NATIVE
+            text_out = _col_conv(_add_formatted_pad_help);
+            return '?';
+#endif
             if (crawl_state.game_is_hints_tutorial())
                 text_out = _col_conv(_add_formatted_hints_help);
             else
@@ -1398,6 +1620,20 @@ public:
 private:
     maybe_bool process_key(int ch) override
     {
+#ifdef USE_PS5_NATIVE
+        // Left and right on the d-pad turn the pages.
+        if (ch == CK_LEFT || ch == CK_RIGHT)
+        {
+            static const int pages[] = { '?', '^', '*', '%', '&', '~' };
+            const int count = ARRAYSZ(pages);
+            int at = 0;
+            for (int i = 0; i < count; i++)
+                if (pages[i] == prev_page)
+                    at = i;
+            return process_key(pages[(at + count + (ch == CK_RIGHT ? 1 : -1))
+                                     % count]);
+        }
+#endif
         int key = toalower(ch);
 
 #ifdef USE_TILE_LOCAL
@@ -1473,6 +1709,11 @@ static bool _show_help_special(int key)
 
 void show_help(int section, string highlight_string)
 {
+#ifdef USE_PS5_NATIVE
+    // The index page is a list of letters to press: open on the controller.
+    if (section == CK_HOME)
+        section = '?';
+#endif
     // if `section` is a special case, don't instantiate a help popup at all.
     if (_show_help_special(toalower(section)))
         return;

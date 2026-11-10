@@ -1,0 +1,29 @@
+# C library functions a title always takes from the platform layer
+# (libps5platform.a, mihawk-99/PS5_PayloadSDK): ps5-link.py binds each name
+# to ps5_<name> with --defsym, so no title source defines a libc name itself.
+#
+# These are the ones the console has but refuses or gets wrong in a title, so
+# the link alone cannot tell. Functions the title's modules do not export at
+# all need no entry: the link reports them as undefined and ps5-link.py binds
+# them to the platform layer when it has them.
+#
+# ps5-link.py refuses a binding whose ps5_ version calls the original (it
+# would call itself): that rules out sysconf and pthread_exit.
+
+access      # refused by the sandbox
+opendir     # refused by the sandbox
+readdir     # goes with opendir
+closedir    # goes with opendir
+getcwd      # raises SIGSYS
+fork        # missing
+isatty      # broken
+readlink    # returns nothing (Crawl hardcodes /app0/eboot.bin instead)
+fchown      # broken
+localtime_r # broken
+localeconv  # broken
+mkstemp     # broken; bound even when unused: an unbound call jumps to 0
+strcasestr  # only libScePosixForWebKit exports it
+regcomp     # POSIX regex (musl's TRE in the platform layer)
+regerror
+regexec
+regfree

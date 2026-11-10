@@ -72,15 +72,15 @@ Crawl picks a random name for you.
 
 ## Build and release
 
-[`.github/workflows/ps5.yml`](workflows/ps5.yml) builds both versions with
-the pinned toolchain: ps5-native-app-boilerplate, ps5-opengl with its SDK
-and SDL2, PacBrew's PS5 libraries and mihawk-99's platform layer. To build
-the title by hand after setting those up in `$HOME`:
+[`.github/workflows/ps5.yml`](workflows/ps5.yml) builds both versions. The
+title is built by [`crawl-ref/source/ps5/build_ps5.py`](../crawl-ref/source/ps5/README.md),
+which pins everything it builds with; on Linux or WSL:
 
 ```sh
 cd crawl-ref/source
-make -j"$(nproc)" PS5_NATIVE=y crawl-native.objs
-bash ps5/package-native.sh --build   # -> build-ps5/app/dist/PPSA92041{,.zip}
+python3 ps5/build_ps5.py deps      # once: SDKs, libraries, SDL2, host tools
+python3 ps5/build_ps5.py build     # make PS5_NATIVE=y
+python3 ps5/build_ps5.py package   # -> ps5/dist/PPSA92041{,.zip}
 ```
 
 **Releasing.** The homebrew catalog tells consoles an update exists by

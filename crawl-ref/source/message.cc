@@ -1585,6 +1585,15 @@ static void _mpr(string text, msg_channel_type channel, int param, bool nojoin,
         fs.filter_lang();
     text = fs.to_colour_string();
 
+#ifdef USE_PS5_NATIVE
+    // The title's log (/data/crawl-ps5.log) is the only place to read what
+    // went wrong: errors always, every message in debug builds.
+# ifndef PS5_DEBUG_INPUT
+    if (channel == MSGCH_ERROR)
+# endif
+        printf("[%s] %s\n", channel_to_str(channel).c_str(),
+               fs.tostring().c_str());
+#endif
     message_line msg = message_line(text, channel, param, join);
     buffer.add(msg);
 

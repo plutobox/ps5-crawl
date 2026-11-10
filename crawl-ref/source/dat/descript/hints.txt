@@ -10,7 +10,7 @@ be your main goal. Try to delve as deeply as possible but beware; death lurks
 around every corner.
 
 For the moment, just remember the following keys and their functions:
-  <input>$cmd[CMD_DISPLAY_COMMANDS]?</input> — shows the items and the commands
+  <input>$cmd[CMD_DISPLAY_COMMANDS]<nopad>?</nopad></input> — shows the items and the commands
   <input>$cmd[CMD_SAVE_GAME]</input>  — saves the game, to be resumed later
 (but note that death is permanent)
   <input>$cmd[CMD_LOOK_AROUND]</input>  — examines something in your vicinity
@@ -87,7 +87,7 @@ finished
 
 Congrats! You survived until the end of hints mode — be sure to try the
 other characters as well. Note that the command help screen
-(<input>$cmd[CMD_DISPLAY_COMMANDS]?</input>) will look very different from now
+(<input>$cmd[CMD_DISPLAY_COMMANDS]<nopad>?</nopad></input>) will look very different from now
 on. Here's a last playing hint:
 %%%%
 finished explored
@@ -117,19 +117,21 @@ and allow you to travel to them. You can even search for dungeon features, like
 finished random 0
 
 The game keeps an automated log for your characters. Use
-<input>$cmd[CMD_DISPLAY_COMMANDS]:</input> to read it. Once your character
+<nopad><input>$cmd[CMD_DISPLAY_COMMANDS]:</input></nopad><pad><input>$cmd[CMD_CHARACTER_DUMP]</input></pad> to read it. Once your character
 perishes, two morgue files are left in the <w>morgue/</w> directory. The one
 ending in .txt contains a copy of your log. During play, you can create a dump
 file with <input>$cmd[CMD_CHARACTER_DUMP]</input>.
 %%%%
 finished random 1
 
-Crawl has a macro function built in: press <input>$cmd[CMD_MACRO_MENU]</input>
+<nopad>Crawl has a macro function built in: press <input>$cmd[CMD_MACRO_MENU]</input>
 to define a macro by first specifying a trigger key (say, <input>F1</input>)
 and a command sequence, for example <input>za.</input>. The latter will make
 the <input>F1</input> key always zap the spell in slot a at the nearest
 monster. For more information on macros, type
-<input>$cmd[CMD_DISPLAY_COMMANDS]~</input>.
+<input>$cmd[CMD_DISPLAY_COMMANDS]~</input>.</nopad><pad>The <input>Options</input> button opens the game menu: save and exit, the
+character dump, this help, and <w>All commands</w>, which lists every command
+that has no button of its own.</pad>
 %%%%
 finished random 2
 
@@ -199,8 +201,7 @@ Remember to rest between fights and to enter unexplored terrain with full health
 and magic. Ideally you should retreat into areas you've already explored and
 cleared of monsters; resting on the edge of the explored terrain increases the
 chances of your rest being interrupted by wandering monsters. To rest, press
-<w>5</w> or <w>Shift-numpad 5</w><tiles>, or <w>click the rest button</w>
-</tiles>.
+<nopad><w>5</w> or <w>Shift-numpad 5</w></nopad><pad><w>$cmd[CMD_REST]</w></pad>.
 %%%%
 HINT_BERSERK_CONSERVES_HP
 
@@ -452,12 +453,12 @@ HINT_SEEN_SHOP
 
 That<console> $1</console> is a shop. You can enter it by typing
 <w>$cmd[CMD_GO_UPSTAIRS]</w> or <w>$cmd[CMD_GO_DOWNSTAIRS]</w>
-<tiles>, or by <w>left-clicking</w> on it<tiles>
+<tiles>, or by <w>left-clicking</w> on it</tiles>
 while standing on the square.
 
-If there's anything you want which you can't afford yet, you can hold
+<nopad>If there's anything you want which you can't afford yet, you can hold
 <w>Shift</w> and press the corresponding letter to put it on your shopping list.
-The game will then remind you when you gather enough gold to buy it.
+The game will then remind you when you gather enough gold to buy it.</nopad>
 %%%%
 HINT_SEEN_DOOR
 
@@ -558,7 +559,7 @@ HINT_YOU_ENCHANTED
 Enchantments of all types can befall you temporarily.
 Brief descriptions of these appear at the lower end of the stats area.
 Press <w>$cmd[CMD_DISPLAY_CHARACTER_STATUS]</w> for more details. You can search
-for full enchantment descriptions by pressing <w>$cmd[CMD_DISPLAY_COMMANDS]/T</w>.
+<nopad>for full enchantment descriptions by pressing <w>$cmd[CMD_DISPLAY_COMMANDS]/T</w>.</nopad><pad>Each one is described when you look at your character on the overview screen.</pad>
 %%%%
 HINT_YOU_POISON
 
@@ -583,16 +584,19 @@ letter<localtiles>, or by clicking on them</localtiles>.
 %%%%
 HINT_SHIFT_RUN
 
-Walking around takes fewer keystrokes if you press <w>Shift-direction</w> or
+<nopad>Walking around takes fewer keystrokes if you press <w>Shift-direction</w> or
 <w>/ direction</w>. That will let you run until a monster comes into sight or
-your character sees something interesting.
+your character sees something interesting.</nopad><pad>Walking around takes fewer button presses with <w>$cmd[CMD_EXPLORE]</w>, which
+explores on its own until a monster comes into sight or your character sees
+something interesting, and with <w>$cmd[CMD_INTERLEVEL_TRAVEL]</w>, which travels to a
+level or place you choose.</pad>
 %%%%
 HINT_MAP_VIEW
 
 As you explore a level, orientation can become difficult. Press
-<w>$cmd[CMD_DISPLAY_MAP]</w> to bring up the level map. Typing <w>?</w> shows
-the list of level map commands. Most importantly, moving the cursor to a spot
-and pressing <w>.</w> or <w>Enter</w> lets your character move there on its own.
+<w>$cmd[CMD_DISPLAY_MAP]</w> to bring up the level map. <nopad>Typing <w>?</w> shows
+the list of level map commands. </nopad>Most importantly, moving the cursor to a spot
+and pressing <nopad><w>.</w> or <w>Enter</w></nopad><pad><w>Cross</w></pad> lets your character move there on its own.
 
 <localtiles>Also, clicking on the right-side minimap with your <w>right mouse
 button</w> will zoom into that dungeon area. Clicking with the <w>left mouse
@@ -638,7 +642,7 @@ If you're low on health or magic and there's no urgent need to move, you can
 rest for a bit. Ideally, you should retreat to an area you've already explored
 and cleared of monsters before resting, since resting on the edge of the
 explored terrain increases the risk of rest being interrupted by a wandering
-monster. Press <w>$cmd[CMD_REST]</w> or <w>shift-numpad-5</w>
+monster. Press <w>$cmd[CMD_REST]</w><nopad> or <w>shift-numpad-5</w></nopad>
 <localtiles>, or click on the 'rest' button,</localtiles> to do so.
 %%%%
 HINT_NEED_POISON_HEALING

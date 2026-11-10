@@ -1017,6 +1017,11 @@ bool pad_r1_pending = false;
 bool pad_r2_pending = false;
 bool pad_l1_pending = false;
 bool pad_modifier_used = false;
+// The box for a held layer shows only after it has been held a moment, so a
+// quick tap or chord doesn't flash it.
+const Uint32 PAD_LAYER_BOX_DELAY_MS = 600;
+Uint32 pad_layer_since = 0;
+bool pad_layer_shown = false;
 
 pad_mode _pad_mode()
 {
@@ -1326,6 +1331,37 @@ int _pad_redraw_event(wm_event *event)
     return 1;
 }
 
+#ifdef USE_PS5_NATIVE
+// R1, R2 or L1 was just pressed: start timing for the box.
+void _pad_layer_started()
+{
+    pad_layer_since = SDL_GetTicks();
+    pad_layer_shown = false;
+}
+
+// Milliseconds until the box for a held layer is due, or INT_MAX if none is
+// waiting to show.
+int _pad_layer_wait()
+{
+    if (pad_layer_shown || !(pad_r1_pending || pad_r2_pending || pad_l1_pending))
+        return INT_MAX;
+    const Sint32 left = (Sint32) (pad_layer_since + PAD_LAYER_BOX_DELAY_MS
+                                  - SDL_GetTicks());
+    return left > 0 ? left : 0;
+}
+
+// Time to show the box: ask for a redraw.
+int _pad_layer_due(wm_event *event)
+{
+    if (_pad_layer_wait() > 0)
+        return 0;
+    if (pad_layer_shown || !(pad_r1_pending || pad_r2_pending || pad_l1_pending))
+        return 0;
+    pad_layer_shown = true;
+    return _pad_redraw_event(event);
+}
+#endif
+
 // Fill in a key press. Returns 1 if there is one to deliver.
 int _pad_key_event(wm_event *event, int key)
 {
@@ -1488,6 +1524,7 @@ static int _handle_controller_event(const SDL_Event &sdlevent, wm_event *event)
                 (pressed == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER
                     ? pad_r1_pending : pad_l1_pending) = true;
                 pad_modifier_used = false;
+                _pad_layer_started();
                 if (pressed == SDL_CONTROLLER_BUTTON_LEFTSHOULDER)
                 {
                     SDL_GameController *pad = SDL_GameControllerFromInstanceID(
@@ -1499,7 +1536,7 @@ static int _handle_controller_event(const SDL_Event &sdlevent, wm_event *event)
                         return _pad_direction_changed(event);
                     }
                 }
-                return _pad_redraw_event(event); // show the layer's box
+                return 0; // the box shows after a moment (_pad_layer_due)
             }
             const int modifier = pad_r1_pending ? 1 : pad_r2_pending ? 2
                                : pad_l1_pending ? 3 : 0;
@@ -1590,7 +1627,8 @@ static int _handle_controller_event(const SDL_Event &sdlevent, wm_event *event)
                 {
                     pad_r2_pending = true;
                     pad_modifier_used = false;
-                    return _pad_redraw_event(event);
+                    _pad_layer_started();
+                    return 0;
                 }
                 if (!held && pad_r2_pending)
                 {
@@ -1643,8 +1681,15 @@ int SDLWrapper::wait_event(wm_event *event, int timeout)
 #endif
         if (_pad_repeat_due(event))
             return 1;
+#ifdef USE_PS5_NATIVE
+        if (_pad_layer_due(event))
+            return 1;
+#endif
         int slice = max(timeout - waited, 0);
         slice = min(slice, _pad_repeat_wait());
+#ifdef USE_PS5_NATIVE
+        slice = min(slice, _pad_layer_wait());
+#endif
 #ifdef PS5_DEBUG_INPUT
         slice = min(slice, 250);
 #endif
@@ -2072,7 +2117,7 @@ string ps5_pad_layer_text()
 {
     const int modifier = pad_r1_pending ? 1 : pad_r2_pending ? 2
                        : pad_l1_pending ? 3 : 0;
-    if (!modifier)
+    if (!modifier || !pad_layer_shown)
         return "";
     const char *title = modifier == 1 ? "items"
                       : modifier == 2 ? "know and plan" : "the world";

@@ -33,6 +33,7 @@
 #include "prompt.h"
 #include "religion.h"
 #include "skill-menu.h"
+#include "sound.h"
 #include "spl-goditem.h"
 #include "stringutil.h"
 #include "transform.h"
@@ -1114,6 +1115,9 @@ bool quaff_potion(item_def &potion, bool force)
 {
     const bool was_known = item_type_known(potion);
 
+#ifdef USE_SOUND
+    parse_sound(QUAFF_POTION_SOUND);
+#endif
     if (!was_known)
     {
         identify_item(potion);

@@ -1363,7 +1363,8 @@ LIBS += $(CONTRIB_LIBS) $(EXTRA_LIBS)
 ifdef PS5_NATIVE
 # The title links exactly these PS5 builds: PacBrew's SDL2_mixer (with its
 # ogg, mp3 and flac decoders), SDL2_image (with the WebP it was built with),
-# freetype (with bzip2), libpng, zlib, Lua and SQLite; the platform layer;
+# freetype (with bzip2), libpng, zlib, Lua and SQLite, libsodium (SHA-256,
+# for the music download); the platform layer;
 # ps5/sdl2's SDL2 and the OpenGL SDK. ps5/tooling/ps5-link.py adds the C++
 # runtime and the system modules' stubs.
 # SDL2 by its path: PacBrew has a libSDL2.a of its own (with a keyboard
@@ -1371,11 +1372,13 @@ ifdef PS5_NATIVE
 LIBS := -L$(PS5_PACBREW_PREFIX)/lib -L$(PS5_PLATFORM_PREFIX)/lib \
         -L$(PS5_OPENGL_PREFIX)/lib \
         -lSDL2_mixer -lSDL2_image -lwebpdemux -lwebp -lsharpyuv -lfreetype \
-        -lbz2 -lpng16 -lz -llua -lsqlite3 -lps5platform \
+        -lbz2 -lpng16 -lz -llua -lsqlite3 -lsodium -lps5platform \
         $(PS5_SDL2_PREFIX)/lib/libSDL2.a -lPS5OpenGLCore33
 # The port's own code (ps5/app): the process entry and exit, the system's
-# on-screen keyboard, and a few C library functions.
-PS5_APP_OBJECTS := ps5/app/ps5_entry.o ps5/app/ime.o ps5/app/native_shims.o
+# on-screen keyboard, HTTPS downloads (the system's sceHttp), and a few C
+# library functions.
+PS5_APP_OBJECTS := ps5/app/ps5_entry.o ps5/app/ime.o ps5/app/download.o \
+                   ps5/app/native_shims.o
 EXTRA_OBJECTS += $(PS5_APP_OBJECTS)
 LDFLAGS += -Wl,--wrap=main -Wl,--wrap=exit -Wl,--defsym=lstat=crawl_ps5_lstat
 endif
@@ -1837,7 +1840,8 @@ ifdef PS5_NATIVE
 # The port's C code (ps5/app), compiled as C, not with the game's C++ flags.
 ps5/app/%.o: ps5/app/%.c .cflags
 	$(QUIET_CC)$(CC) -std=c11 -O2 -Wall -Wextra -fPIC -ffunction-sections \
-	    -fdata-sections -D__PROSPERO__ -MMD -c $< -o $@
+	    -fdata-sections -D__PROSPERO__ -I$(PS5_PACBREW_PREFIX)/include \
+	    -MMD -c $< -o $@
 -include $(PS5_APP_OBJECTS:%.o=%.d)
 endif
 

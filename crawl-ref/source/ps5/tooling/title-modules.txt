@@ -27,3 +27,6 @@ libSceAgcDriver.so      # verified: the OpenGL SDK (its own stub, in its lib/)
 libSceImeDialog.so      # verified: Crawl, NetHack; loaded at run time first
                         # (ps5/app/ime.c), SwanStation saw a launch failure
                         # when it was not
+libSceNet.so            # verified: Crawl's music download (2026-11-11;
+libSceSsl.so            # ps5/app/download.c), the system's HTTPS as
+libSceHttp.so           # SwanStationPS5's update check runs it

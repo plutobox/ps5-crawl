@@ -4560,6 +4560,7 @@ tileidx_t tileidx_gametype(const game_type gtype)
     case GAME_TYPE_SPRINT:
         return TILEG_STARTUP_SPRINT;
     case GAME_TYPE_INSTRUCTIONS:
+    case GAME_TYPE_DOWNLOAD_MUSIC:
         return TILEG_STARTUP_INSTRUCTIONS;
     case GAME_TYPE_ARENA:
         return TILEG_STARTUP_ARENA;

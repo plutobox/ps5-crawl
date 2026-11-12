@@ -62,6 +62,7 @@
 #include "player.h"
 #include "prompt.h"
 #include "slot-select-mode.h"
+#include "sound.h"
 #include "species.h"
 #include "spl-util.h"
 #include "stash.h"
@@ -618,6 +619,7 @@ const vector<GameOption*> game_options::build_options_list()
         new BoolGameOption(SIMPLE_NAME(default_manual_training), false),
         new BoolGameOption(SIMPLE_NAME(one_SDL_sound_channel), false),
         new BoolGameOption(SIMPLE_NAME(sounds_on), true),
+        new BoolGameOption(SIMPLE_NAME(music_on), true),
         new BoolGameOption(SIMPLE_NAME(quiver_menu_focus), false),
         new BoolGameOption(SIMPLE_NAME(launcher_autoquiver), true),
         new ColourGameOption(SIMPLE_NAME(tc_reachable), BLUE),
@@ -2307,26 +2309,56 @@ void base_game_options::merge(const base_game_options &other)
 
 
 #if defined(USE_PS5_NATIVE) && defined(USE_SOUND)
-// Where the PS5 title looks for a sound pack: a folder holding the pack's
-// init.txt, as the pack's zip unpacks.
-static const char *PS5_SOUND_PACK_DIRS[] = { "/data/crawl/sound-pack/" };
+#include "ps5/app/download.h"
+
+// Where the PS5 title looks for sound packs, each a folder holding the pack's
+// init.txt, as the pack's zip unpacks: first one the player unzips on the
+// console (such as the CNC Open Sound Pack), then the one the title carries.
+// The first pack found gives the sound effects; music comes from every pack,
+// the first to name a branch's track winning.
+static const char *PS5_SOUND_PACK_DIRS[] = { "/data/crawl/sound-pack/",
+                                             "/app0/assets/sound/" };
 
 // Sound packs are written for the WebTiles sound module
 // (refracta/dcss-webtiles-extension-module, modules/sound-support), which
 // reads "sound ^= regex:file" itself: split at the first ':', never at a
 // comma (Crawl's list options split "a, b" in two), and the first matching
 // line wins (Crawl's ^= would put each new line first). Its other lines are
-// ordinary options.
+// ordinary options. "music ^= branch:file" (a branch's abbreviation, or
+// "menu") is the title's own, with the file relative to the pack's folder.
 static void _ps5_read_sound_pack(const string &dir, const string &init,
-                                 bool runscripts)
+                                 bool sounds, bool runscripts)
 {
     FileLineInput f(init.c_str());
     vector<sound_mapping> mappings;
-    unsigned fixed = 0;
+    unsigned fixed = 0, tracks = 0;
     while (!f.eof())
     {
         string line = f.get_line();
         trim_string(line);
+        if (starts_with(line, "music ^="))
+        {
+            string value = line.substr(8);
+            const size_t colon = value.find(':');
+            if (colon == string::npos)
+            {
+                printf("Sound pack: no file in '%s'\n", line.c_str());
+                continue;
+            }
+            string key = value.substr(0, colon);
+            string file = value.substr(colon + 1);
+            trim_string(key);
+            trim_string(file);
+            // The startup menu downloads the music the title doesn't carry,
+            // into the pack's folder or CRAWL_PS5_DOWNLOAD_DIR.
+            set_music(key, { catpath(dir, file),
+                             catpath(CRAWL_PS5_DOWNLOAD_DIR, file) });
+            tracks++;
+            continue;
+        }
+        if (!sounds)
+            continue;
+
         string value;
         if (starts_with(line, "sound ^=") || starts_with(line, "sound +="))
             value = line.substr(8);
@@ -2363,24 +2395,33 @@ static void _ps5_read_sound_pack(const string &dir, const string &init,
     }
     Options.sound_mappings.insert(Options.sound_mappings.begin(),
                                   mappings.begin(), mappings.end());
-    printf("Sound pack: %s (%u sounds, %u without an extension)\n",
-           init.c_str(), (unsigned) mappings.size(), fixed);
+    printf("Sound pack: %s (%u sounds, %u without an extension, %u tracks)\n",
+           init.c_str(), (unsigned) mappings.size(), fixed, tracks);
 }
 
 static void _ps5_load_sound_pack(bool runscripts)
 {
+    clear_music();
+    bool sounds = true;
     for (const char *dir : PS5_SOUND_PACK_DIRS)
     {
         const string init = catpath(dir, "init.txt");
         if (!file_exists(init))
+        {
+            printf("No sound pack in %s\n", dir);
             continue;
+        }
+        if (!sounds)
+        {
+            _ps5_read_sound_pack(dir, init, false, runscripts);
+            continue;
+        }
         Options.sound_file_path.clear();
-        _ps5_read_sound_pack(dir, init, runscripts);
+        _ps5_read_sound_pack(dir, init, true, runscripts);
         // A pack's own sound_file_path is relative to its folder.
         Options.sound_file_path = catpath(dir, Options.sound_file_path);
-        return;
+        sounds = false;
     }
-    printf("No sound pack in %s\n", PS5_SOUND_PACK_DIRS[0]);
 }
 #endif
 
@@ -2414,9 +2455,10 @@ void read_init_file(bool runscripts)
     get_default_options() = Options;
 
 #if defined(USE_PS5_NATIVE) && defined(USE_SOUND)
-    // A sound pack in Crawl's own format (an init.txt of "sound ^=
-    // regex:file" lines beside its files), unzipped on the console. Before
-    // init.txt, so the player's options still win (sounds_on = false).
+    // Sound packs in Crawl's own format (an init.txt of "sound ^=
+    // regex:file" lines beside its files): one unzipped on the console, and
+    // the title's own. Before init.txt, so the player's options still win
+    // (sounds_on = false, music_on = false).
     _ps5_load_sound_pack(runscripts);
 #endif
 

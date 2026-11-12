@@ -52,6 +52,11 @@
 
 #define MEMORISE_SPELL_SOUND     "MEMORISE_SPELL"
 
+#define QUAFF_POTION_SOUND       "QUAFF_POTION"
+#define CAST_SPELL_SOUND         "CAST_SPELL"
+#define STAIRS_DOWN_SOUND        "STAIRS_DOWN"
+#define STAIRS_UP_SOUND          "STAIRS_UP"
+
 
 /***********************************
  * CONFIGURABLE CONSTANTS END HERE *
@@ -78,6 +83,18 @@ sound_mapping check_sound_patterns(const string& message);
 
 void play_sound(sound_mapping sound_data);
 void play_sound(const char *file, bool interrupt_game = false);
+
+// Music: one track per branch abbreviation ("D", "Lair", ...), and "menu"
+// for the startup menu, played from the first of its files that exists. Only
+// the SDL_mixer backend plays it. A key keeps the first track it is given.
+void clear_music();
+void set_music(const string &key, const vector<string> &files);
+// Starts the track for where the player is (or the menu's), and turns the
+// music down while hit points are low. Called once per turn and from the
+// startup menu.
+void update_music();
+// Loads the current track again, as after its file was downloaded.
+void reload_music();
 
 
 #endif  // End ifdef USE_SOUND

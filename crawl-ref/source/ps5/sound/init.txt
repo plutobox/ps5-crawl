@@ -1,0 +1,83 @@
+# The PS5 title's own sound pack: sound effects and music, all freely
+# licensed (CREDITS.txt). The title reads it from /app0/assets/sound/.
+#
+# "sound ^= regex:file": the first line whose regex matches a message plays
+# its file (from sound_file_path). Lines in capitals match the game's own
+# sound cues rather than messages. "music ^= branch:file": a branch's track,
+# by its abbreviation, or "menu"; a branch with no track keeps the one
+# playing. A pack unzipped to /data/crawl/sound-pack/ replaces these sound
+# effects but keeps this music where it names no track itself.
+
+sound_file_path = sfx/
+
+# The game's cues
+sound ^= ^QUAFF_POTION$:quaff.ogg
+sound ^= ^CAST_SPELL$:cast_spell.wav
+sound ^= ^MEMORISE_SPELL$:read.ogg
+sound ^= ^STAIRS_DOWN$:stairs_down.wav
+sound ^= ^STAIRS_UP$:stairs_up.wav
+
+# Milestones
+sound ^= ^You die\.\.\.:player_death.wav
+sound ^= LOW HITPOINT WARNING:hp_low.wav
+sound ^= ^You have reached level:level_up.wav
+sound ^= Orb of Zot:orb.wav
+sound ^= rune of Zot|rune and feel its power:rune.wav
+
+# Scrolls
+sound ^= ^As you (read|thunderously recite) the:read.ogg
+
+# Combat
+sound ^= ^You (kill|destroy|blow up) :kill.wav
+sound ^= is (killed|destroyed|blown up)!:kill.wav
+sound ^= ^You (throw|shoot) :ranged.wav
+sound ^= ^You block :block.wav
+sound ^= (bites|stings) you:hurt_bite.wav
+sound ^= (claws|pecks|gores|tramples) you:hurt_claw.wav
+sound ^= (hits|punches|kicks|headbutts|touches|engulfs|constricts|tentacle-slaps|tail-slaps|trunk-slaps|pounces on) you:hurt.wav
+sound ^= misses you:miss_enemy.wav
+sound ^= ^You (hit|attack|batter|beat|bludgeon|carve|claw|bash|clumsily bash|dice|eviscerate|flagellate|flog|fracture|impale|mangle|pummel|punch|puncture|pierce|scratch|shatter|shave|slash|slice|sock|splatter|squash|thrash|thump|kick|headbutt|bite|peck|gore) :melee_hit.wav
+sound ^= comes into view\.:spot.wav
+
+# Doors
+sound ^= ^You open the :door.wav
+sound ^= ^You close the :door_close.wav
+
+# Picking things up: the inventory line, by the kind of item
+sound ^= ^You now have [0-9]+ gold:pickup_gold.wav
+sound ^= ^[a-zA-Z] - .*potions? of:pickup_potion.ogg
+sound ^= ^[a-zA-Z] - .*scrolls? (of|labelled):pickup_scroll.wav
+sound ^= ^[a-zA-Z] - .*(armour|robe|cloak|scarf|helmet|hat|gloves|gauntlets|boots|barding|shield|buckler|orb|mail|scales|hide|leather):pickup_armour.wav
+sound ^= ^[a-zA-Z] - .*amulet:pickup_amulet.wav
+sound ^= ^[a-zA-Z] - .*ring:pickup_ring.wav
+sound ^= ^[a-zA-Z] - .*wand:pickup_wand.wav
+sound ^= ^[a-zA-Z] - .*(book|manual|parchment):pickup_book.wav
+sound ^= ^[a-zA-Z] - .*staff:pickup_staff.wav
+sound ^= ^[a-zA-Z] - .*talisman:pickup_talisman.wav
+sound ^= ^[a-zA-Z] - .*(arrow|bolt|dart|stone|javelin|boomerang|sling bullet|large rock):pickup_missile.wav
+sound ^= ^[a-zA-Z] - :pickup.wav
+
+# Music
+music ^= menu:music/menu.mp3
+music ^= D:music/dungeon.mp3
+music ^= Temple:music/temple.mp3
+music ^= Lair:music/lair.mp3
+music ^= Swamp:music/swamp.mp3
+music ^= Shoals:music/shoals.mp3
+music ^= Snake:music/snake.mp3
+music ^= Spider:music/spider.mp3
+music ^= Slime:music/slime.mp3
+music ^= Orc:music/orc.mp3
+music ^= Elf:music/elf.mp3
+music ^= Vaults:music/vaults.mp3
+music ^= Crypt:music/crypt.mp3
+music ^= Tomb:music/tomb.mp3
+music ^= Depths:music/depths.mp3
+music ^= Zot:music/zot.mp3
+music ^= Hell:music/hell.mp3
+music ^= Coc:music/coc.mp3
+music ^= Geh:music/geh.mp3
+music ^= Tar:music/tar.mp3
+music ^= Dis:music/dis.mp3
+music ^= Abyss:music/abyss.mp3
+music ^= Pan:music/pan.mp3

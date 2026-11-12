@@ -15,11 +15,15 @@ cd crawl-ref/source
 python3 ps5/build_ps5.py deps      # once
 python3 ps5/build_ps5.py build     # make PS5_NATIVE=y -> crawl (the intermediate PIE)
 python3 ps5/build_ps5.py package   # -> ps5/dist/PPSA92041/ and ps5/dist/PPSA92041.zip
-python3 ps5/build_ps5.py deploy --ip <console> [--eboot-only]
+                                   #    (--with-music: carry the music too)
+python3 ps5/build_ps5.py deploy --ip <console> [--eboot-only] [--stop]
 ```
 
 `deploy` uploads the title folder over FTP (port 2121); it refuses while any
-game runs on the console and never launches anything.
+game runs on the console and never launches anything. With `--stop` it first
+closes Crawl, if Crawl is what's running, by sending `tooling/stop-title.c`
+to elfldr (port 9021; from ps5-Towelket); another game still makes it refuse.
+Closing the game this way loses what wasn't saved.
 
 ## How it works
 
@@ -43,7 +47,24 @@ game runs on the console and never launches anything.
   binding whose `ps5_` version calls the original.
 - **Packaging** (`package`): `ps5-native-tool` converts the PIE to the PS5
   layout and signs it as `eboot.bin`; `sce_sys/` comes from the repository root
-  (`param.json`, `icon0.png`), the game data from `make install-data`.
+  (`param.json`, `icon0.png`), the game data from `make install-data`, and the
+  sound pack in `assets/sound/` from `sound/`.
+- **Sound** (`sound/`): the title's sound pack, an `init.txt` of `sound ^=
+  regex:file` lines over `sfx/` and `music ^= branch:file` lines over
+  `music/`. The sound effects are committed (CC0); the 23 music tracks (Kevin
+  MacLeod, CC BY 4.0, about 195 MB) are pinned in `build_ps5.py` by SHA-256
+  and size, and the title downloads them (`package --with-music` carries
+  them instead, fetched into `.deps/music/`). Credits:
+  `sound/CREDITS.txt`. The game reads a pack unzipped to
+  `/data/crawl/sound-pack/` first, for its sound effects and any music it
+  names, then the title's own (`initfile.cc`). SDL_mixer plays the music
+  as a stream, switching tracks by branch (`sound.cc`).
+- **Downloading the music**: the startup
+  menu's Download Music fetches the tracks in `music-download.txt` with the
+  system's `sceHttp` and `sceSsl` and its certificate store (`app/download.c`,
+  following SwanStationPS5's update check), checks each one's SHA-256, and
+  saves it in the install folder's `assets/sound/music/`, or in
+  `/data/crawl/music/` if the title can't write there.
 - **`app/`**, the port's own code: `ps5_entry.c` wraps the game's `main()` (log
   to `/data/crawl-ps5.log`, the save folder `/download0/crawl`) and every
   `exit()` (a title can't exit: it asks the system to close it);

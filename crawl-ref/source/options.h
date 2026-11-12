@@ -620,6 +620,7 @@ public:
 
     bool        sounds_on;              // Allow sound effects to play
     bool        one_SDL_sound_channel;  // Limit to one SDL sound at once
+    bool        music_on;               // Allow music to play
 
     char_set_type  char_set;
     FixedVector<char32_t, NUM_DCHAR_TYPES> char_table;

@@ -60,6 +60,7 @@
 #include "religion.h"
 #include "shout.h"
 #include "skills.h"
+#include "sound.h"
 #include "spl-book.h"
 #include "spl-clouds.h"
 #include "spl-damage.h"
@@ -1092,6 +1093,9 @@ spret cast_a_spell(bool check_range, spell_type spell, dist *_target,
     _handle_energy_orb(cost, cast_result);
     if (cast_result == spret::success)
     {
+#ifdef USE_SOUND
+        parse_sound(CAST_SPELL_SOUND);
+#endif
         stardust_orb_trigger(cost);
         if (you.unrand_equipped(UNRAND_MAJIN) && one_chance_in(500))
             _majin_speak(spell);

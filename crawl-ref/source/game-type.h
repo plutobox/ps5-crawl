@@ -15,5 +15,6 @@ enum game_type
     GAME_TYPE_HIGH_SCORES,
     GAME_TYPE_CUSTOM_SEED,
     GAME_TYPE_DESCENT,
+    GAME_TYPE_DOWNLOAD_MUSIC, // the PS5 title's startup menu
     NUM_GAME_TYPE
 };

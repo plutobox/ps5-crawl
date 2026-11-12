@@ -70,6 +70,24 @@ Everything else is in Options, **All commands**. In the game, Options, Help and 
 When you start a new game, you can also leave the name empty and confirm:
 Crawl picks a random name for you.
 
+## Sound and music
+
+The title plays sound effects for combat, items, doors and stairs, and music
+for each branch. The music isn't in the download: on the main menu, choose
+**Download Music** to fetch it (about 200 MB, from incompetech.com; Kevin
+MacLeod, CC BY 4.0). The entry goes once everything is there. The music gets
+quieter when your hit points are low.
+Options, All commands, **mute/unmute sound and music** turns both off and on.
+To keep the sound effects and turn off only the music, add `music_on = false`
+to your options file.
+
+For more sound effects, the [CNC Open Sound Pack](https://github.com/refracta/dcss-webtiles-extension-module/blob/main/modules/sound-support/README.md#cnc-open-sound-pack)
+has sounds for about 3,000 messages. Download its zip from
+<https://osp.nemelex.cards/build/latest.zip> and unzip it so that its
+`init.txt` and `se` folder are in `/data/crawl/sound-pack/` on the console
+(over FTP). Its sounds replace the built-in ones; the music stays. The pack
+isn't included because its sounds have no stated licence.
+
 ## What's missing
 
 - **Typing a repeat count.** The prompt that reads a number and then a
@@ -80,7 +98,6 @@ Crawl picks a random name for you.
 - **A closing screen.** A PS5 title may not exit by itself. After you save
   or quit, the screen stops updating; press the PS button and close the game
   from the home screen.
-- **Sound.** The title is built without Crawl's sound support.
 - **Online play.** WebTiles and the online servers aren't available; this is
   the offline game.
 - **The ELF payload build** (`PS5=y`, for loaders such as elfldr) is built

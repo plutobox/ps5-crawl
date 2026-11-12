@@ -361,7 +361,9 @@ bool OuterMenu::move_button_focus(int fx, int fy, int dx, int dy, int limit)
             nx >= 0 && nx < m_width && ny >= 0 && ny < m_height;
             nx += dx, ny += dy)
     {
-        if (m_buttons[ny*m_width + nx])
+        // A hidden button is passed over.
+        if (m_buttons[ny*m_width + nx]
+            && m_buttons[ny*m_width + nx]->is_visible())
         {
             btn = m_buttons[ny*m_width + nx];
             if (--limit == 0)

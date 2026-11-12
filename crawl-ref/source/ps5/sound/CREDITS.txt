@@ -1,0 +1,47 @@
+Sound and music in the PS5 title
+================================
+
+MUSIC
+
+Music by Kevin MacLeod (incompetech.com)
+Licensed under Creative Commons: By Attribution 4.0 License
+https://creativecommons.org/licenses/by/4.0/
+
+  music/menu.mp3      The Path of the Goblin King   startup menu
+  music/dungeon.mp3   Long Note Two                 Dungeon
+  music/temple.mp3    Meditation Impromptu 01       Temple
+  music/lair.mp3      Chee Zee Cave                 Lair
+  music/swamp.mp3     Mesmerize                     Swamp
+  music/shoals.mp3    Windswept                     Shoals
+  music/snake.mp3     Desert City                   Snake Pit
+  music/spider.mp3    Phantom from Space            Spider Nest
+  music/slime.mp3     Controlled Chaos              Slime Pits
+  music/orc.mp3       Crusade                       Orcish Mines
+  music/elf.mp3       Angevin                       Elven Halls
+  music/vaults.mp3    Master of the Feast           Vaults
+  music/crypt.mp3     Ghost Processional            Crypt
+  music/tomb.mp3      Curse of the Scarab           Tomb
+  music/depths.mp3    The Descent                   Depths
+  music/zot.mp3       Lightless Dawn                Realm of Zot
+  music/hell.mp3      Anguish                       Vestibule of Hell
+  music/coc.mp3       Frost Waltz                   Cocytus
+  music/geh.mp3       Volatile Reaction             Gehenna
+  music/tar.mp3       Dark Fog                      Tartarus
+  music/dis.mp3       Killers                       Dis
+  music/abyss.mp3     Unseen Horrors                Abyss
+  music/pan.mp3       Nightmare Machine             Pandemonium
+
+The pairing of tracks to branches follows DCSS Remastered Audio by oLdpZ
+(https://github.com/oLdpZ/dcss-remastered).
+
+SOUND EFFECTS
+
+sfx/*.wav: synthesized by DCSS Remastered Audio's tools/make_sfx.py
+(https://github.com/oLdpZ/dcss-remastered, commit 1ffa425), released by its
+author as CC0 / public domain.
+
+sfx/*.ogg: recordings from Freesound, CC0, as converted by DCSS Remastered
+Audio:
+  sfx/pickup_potion.ogg  freesound_community (Freesound 35983)
+  sfx/quaff.ogg          yodguard, "potion-drink-4" (Freesound 540186)
+  sfx/read.ogg           vittemacop, parchment crinkle (Freesound 478076)

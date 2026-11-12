@@ -7,6 +7,8 @@
 
 #include "startup.h"
 
+#include <chrono>
+
 #include "abyss.h"
 #include "arena.h"
 #include "branch.h"
@@ -45,6 +47,7 @@
 #include "player-save-info.h"
 #include "shopping.h"
 #include "skills.h"
+#include "sound.h"
 #include "spl-book.h"
 #include "spl-util.h"
 #include "stairs.h"
@@ -69,6 +72,10 @@
  #include "syscalls.h"
 #endif
 #include "version.h"
+#if defined(USE_PS5_NATIVE) && defined(USE_SOUND)
+# include "ps5/app/download.h"
+# include "syscalls.h"
+#endif
 
 using namespace ui;
 
@@ -451,7 +458,236 @@ static const vector<game_modes_menu_item> entries =
         "Pit computer controlled teams versus each other!" },
     {GAME_TYPE_HIGH_SCORES, "High Scores",
         "View the high score list." },
+#if defined(USE_PS5_NATIVE) && defined(USE_SOUND)
+    {GAME_TYPE_DOWNLOAD_MUSIC, "Download Music",
+        "Download the music for each branch (Kevin MacLeod, incompetech.com, "
+        "CC BY 4.0)." },
+#endif
 };
+
+#if defined(USE_PS5_NATIVE) && defined(USE_SOUND)
+// The music the title can download, from the sound pack's list
+// (music-download.txt: file, SHA-256, size and URL on each line), and where
+// it goes (initfile.cc plays it from there).
+static const string PS5_SOUND_DIR = "/app0/assets/sound/";
+
+struct music_download
+{
+    string file;
+    string sha256;
+    int64_t size;
+    string url;
+};
+
+static vector<music_download> _missing_music()
+{
+    vector<music_download> missing;
+    FileLineInput f(catpath(PS5_SOUND_DIR, "music-download.txt").c_str());
+    while (!f.eof())
+    {
+        const vector<string> parts = split_string(" ", f.get_line());
+        if (parts.size() != 4)
+            continue;
+        const music_download track = { parts[0], parts[1],
+                                       atoll(parts[2].c_str()), parts[3] };
+        if (!file_exists(catpath(PS5_SOUND_DIR, track.file))
+            && !file_exists(catpath(CRAWL_PS5_DOWNLOAD_DIR, track.file)))
+        {
+            missing.push_back(track);
+        }
+    }
+    return missing;
+}
+
+struct music_progress
+{
+    shared_ptr<Text> text;
+    string heading;
+    int64_t done = 0;       // bytes of the tracks before this one
+    int64_t total = 0;      // bytes of every track to download
+    chrono::steady_clock::time_point last_redraw;
+    bool cancel = false;
+};
+
+static string _megabytes(int64_t bytes)
+{
+    return make_stringf("%lld MB", (long long) (bytes + 999999) / 1000000);
+}
+
+static void _show_music_progress(music_progress &p, int64_t now)
+{
+    p.text->set_text(formatted_string::parse_string(
+        p.heading + "\n\n" + _megabytes(p.done + now) + " of "
+        + _megabytes(p.total) + "\n\n<darkgrey>Circle: stop.</darkgrey>"));
+    ui::pump_events(0);
+}
+
+static int _music_download_progress(void *ctx, int64_t now, int64_t total)
+{
+    UNUSED(total);
+    auto &p = *static_cast<music_progress *>(ctx);
+    const auto t = chrono::steady_clock::now();
+    if (t - p.last_redraw >= chrono::milliseconds(200))
+    {
+        p.last_redraw = t;
+        _show_music_progress(p, now);
+    }
+    return p.cancel;
+}
+
+// The title's install folder, which /app0 is a read-only view of: the
+// folder ShadowMount+ runs it from, /data/homebrew/<title ID>/. Empty if it
+// isn't there (run from somewhere else, or from an image).
+static string _install_dir()
+{
+    FileLineInput f("/app0/sce_sys/param.json");
+    while (!f.eof())
+    {
+        const string line = f.get_line();
+        const size_t key = line.find("\"titleId\"");
+        if (key == string::npos)
+            continue;
+        const size_t open = line.find('"', line.find(':', key));
+        const size_t close = line.find('"', open + 1);
+        if (open == string::npos || close == string::npos)
+            break;
+        const string dir = "/data/homebrew/"
+                           + line.substr(open + 1, close - open - 1) + "/";
+        return file_exists(catpath(dir, "eboot.bin")) ? dir : "";
+    }
+    return "";
+}
+
+// Where downloaded music goes: into the install folder's sound pack, beside
+// what a build with the music carries, if the title may write there, or else
+// CRAWL_PS5_DOWNLOAD_DIR (initfile.cc plays it from either). The folder
+// holding music/, or empty if neither can be written.
+static string _music_download_dir()
+{
+    vector<string> bases;
+    const string install = _install_dir();
+    if (!install.empty())
+        bases.push_back(catpath(install, "assets/sound/"));
+    bases.push_back(CRAWL_PS5_DOWNLOAD_DIR);
+    for (const string &base : bases)
+    {
+        string dir = catpath(base, "music");
+        const string probe = catpath(dir, ".write-test");
+        FILE *f = check_mkdir("Music folder", &dir, true)
+                  ? fopen_u(probe.c_str(), "wb") : nullptr;
+        if (!f)
+        {
+            printf("Music download: can't write in %s\n", dir.c_str());
+            continue;
+        }
+        fclose(f);
+        unlink_u(probe.c_str());
+        printf("Music download: into %s\n", dir.c_str());
+        return base;
+    }
+    return "";
+}
+
+#ifdef PS5_DEBUG_INPUT
+// Debug builds, for testing over FTP: a file test-music-download in the
+// install folder (which FTP can write) makes the startup menu download the
+// first missing track by itself, into the log, and is removed.
+static void _test_music_download()
+{
+    const string install = _install_dir();
+    const string trigger = catpath(install, "test-music-download");
+    if (install.empty() || !file_exists(trigger))
+        return;
+    unlink_u(trigger.c_str());
+    const vector<music_download> missing = _missing_music();
+    const string base = missing.empty() ? "" : _music_download_dir();
+    if (base.empty())
+    {
+        printf("Music download test: nothing to do\n");
+        return;
+    }
+    const music_download &track = missing.front();
+    char err[512] = "";
+    const string path = catpath(base, track.file);
+    printf("Music download test: %s\n", track.url.c_str());
+    if (crawl_ps5_download(track.url.c_str(), path.c_str(),
+                           track.sha256.c_str(), nullptr, nullptr,
+                           err, sizeof err) == 0)
+    {
+        printf("Music download test: got %s\n", path.c_str());
+        reload_music();
+    }
+    else
+        printf("Music download test failed: %s\n", err);
+}
+#endif
+
+static void _download_music()
+{
+    const vector<music_download> missing = _missing_music();
+
+    music_progress p;
+    p.text = make_shared<Text>();
+    p.text->set_margin_for_sdl(20);
+    auto popup = make_shared<ui::Popup>(p.text);
+    bool closed = false;
+    popup->on_keydown_event([&](const KeyEvent &ev) {
+        if (ev.key() == CK_ESCAPE)
+            p.cancel = true;
+        return closed = true;
+    });
+    ui::push_layout(popup);
+
+    string result;
+    const string base = missing.empty() ? "" : _music_download_dir();
+    if (missing.empty())
+        result = "The music is all here already.";
+    else if (base.empty())
+        result = "There's nowhere to save the music.";
+    else
+    {
+        for (const music_download &track : missing)
+            p.total += track.size;
+        int got = 0;
+        for (const music_download &track : missing)
+        {
+            p.heading = make_stringf("Downloading music: %d of %d",
+                                     got + 1, (int) missing.size());
+            _show_music_progress(p, 0);
+            char err[512] = "";
+            const string path = catpath(base, track.file);
+            printf("Music download: %s\n", track.url.c_str());
+            if (crawl_ps5_download(track.url.c_str(), path.c_str(),
+                                   track.sha256.c_str(),
+                                   _music_download_progress, &p,
+                                   err, sizeof err) != 0)
+            {
+                printf("Music download failed: %s\n", err);
+                if (p.cancel)
+                    result = "Stopped.";
+                else
+                    result = string("The download failed: ") + err;
+                break;
+            }
+            p.done += track.size;
+            got++;
+        }
+        if (result.empty())
+            result = "The music is downloaded.";
+        result += make_stringf("\n\n%d of %d tracks downloaded this time.",
+                               got, (int) missing.size());
+        reload_music();
+    }
+
+    p.text->set_text(formatted_string::parse_string(
+        replace_all(result, "<", "<<")
+        + "\n\n<darkgrey>Cross or Circle: close.</darkgrey>"));
+    closed = false;
+    while (!closed && !crawl_state.seen_hups)
+        ui::pump_events();
+    ui::pop_layout();
+}
+#endif
 
 static void _construct_game_modes_menu(shared_ptr<OuterMenu>& container)
 {
@@ -460,6 +696,10 @@ static void _construct_game_modes_menu(shared_ptr<OuterMenu>& container)
         const auto& entry = entries[i];
         if (entry.id == GAME_TYPE_DESCENT && Version::ReleaseType != VER_ALPHA)
             continue;
+#if defined(USE_PS5_NATIVE) && defined(USE_SOUND)
+        if (entry.id == GAME_TYPE_DOWNLOAD_MUSIC && _missing_music().empty())
+            continue;
+#endif
 
         auto label = make_shared<Text>();
 
@@ -764,6 +1004,7 @@ private:
         case GAME_TYPE_ARENA:
         case GAME_TYPE_HIGH_SCORES:
         case GAME_TYPE_INSTRUCTIONS:
+        case GAME_TYPE_DOWNLOAD_MUSIC:
             break;
 
         default:
@@ -989,6 +1230,25 @@ void UIStartupMenu::menu_item_activated(int id)
         show_hiscore_table();
         return;
 
+#if defined(USE_PS5_NATIVE) && defined(USE_SOUND)
+    case GAME_TYPE_DOWNLOAD_MUSIC:
+        _download_music();
+        // Once nothing is missing, the entry goes, as it isn't shown then.
+        if (_missing_music().empty())
+        {
+            if (MenuButton *btn = game_modes_menu->get_button_by_id(id))
+            {
+                btn->set_visible(false);
+                if (MenuButton *first
+                        = game_modes_menu->get_button_by_id(GAME_TYPE_NORMAL))
+                {
+                    game_modes_menu->scroll_button_into_view(first);
+                }
+            }
+        }
+        return;
+#endif
+
     default:
         // It was a savegame instead
         const int save_number = id - NUM_GAME_TYPE;
@@ -1017,6 +1277,12 @@ static void _show_startup_menu(newgame_def& ng_choice,
                                const newgame_def& defaults)
 {
     unwind_bool no_more(crawl_state.show_more_prompt, false);
+#if defined(USE_PS5_NATIVE) && defined(USE_SOUND) && defined(PS5_DEBUG_INPUT)
+    _test_music_download();
+#endif
+#ifdef USE_SOUND
+    update_music();
+#endif
 
 #ifdef USE_TILE_WEB
     tiles_crt_popup show_as_popup;

@@ -4,4 +4,5 @@
 *.sh text eol=lf
 *.py text eol=lf
 crawl-ref/source/ps5/** text=auto eol=lf
+crawl-ref/source/ps5/sound/sfx/** binary
 crawl-ref/source/Makefile text eol=lf

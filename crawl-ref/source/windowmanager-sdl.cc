@@ -27,6 +27,7 @@
 #ifdef PS5_DEBUG_INPUT
 # include <cstdio>
 # include <deque>
+# include <SDL_opengl.h>
 #endif
 
 #include "cio.h"
@@ -59,6 +60,8 @@ void WindowManager::create()
 #if defined(USE_SOUND) && !defined(WINMM_PLAY_SOUNDS)
     Mix_Init(MIX_INIT_OGG | MIX_INIT_MP3);
     Mix_OpenAudio(MIX_DEFAULT_FREQUENCY, MIX_DEFAULT_FORMAT, 2, 4096);
+    // Enough for a turn's overlapping sounds (music has its own).
+    Mix_AllocateChannels(16);
 #endif
 }
 
@@ -1377,8 +1380,9 @@ int _pad_key_event(wm_event *event, int key)
 
 #ifdef PS5_DEBUG_INPUT
 // Debug builds: type the contents of /data/crawl-input.txt, then delete it,
-// so the title can be driven over FTP. "\n" is Enter, and ^ escapes the
-// controller: ^X Cross, ^[ Circle, ^S Square, ^T Triangle, ^O Options,
+// so the title can be driven over FTP (the screen is in
+// /data/crawl-screen.bmp: _debug_save_screen()). "\n" is Enter, and ^
+// escapes the controller: ^X Cross, ^[ Circle, ^S Square, ^T Triangle, ^O Options,
 // ^C Create, ^P the touchpad, ^U ^D ^L ^R the d-pad, ^1 ^2 L1 and R1,
 // ^3 ^4 L2 and R2, ^5 ^6 L3 and R3, ^^ a caret. A button is turned into a
 // key when it is delivered, so it does what it would for the screen then.
@@ -1471,6 +1475,53 @@ int _debug_key_event(wm_event *event)
             return _pad_key_event(event, key);
     }
     return 0;
+}
+
+// The screen as /data/crawl-screen.bmp, readable over FTP as the other PS5
+// titles' debug builds write theirs. Each frame is copied as it is shown
+// (_debug_grab_screen), and the latest written out once the event loop is
+// idle and a second has passed since the last (_debug_save_screen): whole
+// and then renamed, so a reader never sees half a file.
+vector<unsigned char> debug_screen;
+int debug_screen_w = 0, debug_screen_h = 0;
+bool debug_screen_new = false;
+Uint32 debug_screen_saved = 0;
+
+void _debug_grab_screen(SDL_Window *window)
+{
+    SDL_GL_GetDrawableSize(window, &debug_screen_w, &debug_screen_h);
+    if (debug_screen_w <= 0 || debug_screen_h <= 0)
+        return;
+    debug_screen.resize((size_t) debug_screen_w * debug_screen_h * 4);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, debug_screen_w, debug_screen_h, GL_RGBA,
+                 GL_UNSIGNED_BYTE, debug_screen.data());
+    debug_screen_new = true;
+}
+
+void _debug_save_screen()
+{
+    if (!debug_screen_new
+        || !SDL_TICKS_PASSED(SDL_GetTicks(), debug_screen_saved + 1000))
+    {
+        return;
+    }
+    debug_screen_new = false;
+    debug_screen_saved = SDL_GetTicks();
+    const int w = debug_screen_w, h = debug_screen_h;
+    SDL_Surface *shot = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32,
+                                                       SDL_PIXELFORMAT_RGBA32);
+    if (!shot)
+        return;
+    // GL's rows run bottom up.
+    for (int y = 0; y < h; y++)
+    {
+        memcpy(static_cast<unsigned char *>(shot->pixels) + y * shot->pitch,
+               &debug_screen[(size_t) (h - 1 - y) * w * 4], (size_t) w * 4);
+    }
+    if (SDL_SaveBMP(shot, "/data/crawl-screen.tmp") == 0)
+        rename("/data/crawl-screen.tmp", "/data/crawl-screen.bmp");
+    SDL_FreeSurface(shot);
 }
 #endif
 
@@ -1675,6 +1726,7 @@ int SDLWrapper::wait_event(wm_event *event, int timeout)
     for (int waited = 0;;)
     {
 #ifdef PS5_DEBUG_INPUT
+        _debug_save_screen();
         if (_debug_key_event(event))
             return 1;
 #endif
@@ -1817,6 +1869,9 @@ void SDLWrapper::remove_timer(unsigned int& timer_id)
 
 void SDLWrapper::swap_buffers()
 {
+#ifdef PS5_DEBUG_INPUT
+    _debug_grab_screen(m_window);
+#endif
     SDL_GL_SwapWindow(m_window);
 }
 

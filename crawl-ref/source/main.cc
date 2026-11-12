@@ -116,6 +116,7 @@
 #include "shopping.h"
 #include "shout.h"
 #include "skills.h"
+#include "sound.h"
 #include "species.h"
 #include "spl-book.h"
 #include "spl-cast.h"
@@ -2227,7 +2228,8 @@ void process_command(command_type cmd, command_type prev_cmd)
 #ifdef USE_SOUND
     case CMD_TOGGLE_SOUND:
         Options.sounds_on = !Options.sounds_on;
-        mprf("Sound effects are now %s.", Options.sounds_on ? "on" : "off");
+        mprf("Sound is now %s.", Options.sounds_on ? "on" : "off");
+        update_music();
         break;
 #endif
 
@@ -2561,6 +2563,9 @@ static void _prep_input()
     }
     print_stats();
     update_screen();
+#ifdef USE_SOUND
+    update_music();
+#endif
 
     viewwindow();
     update_screen(); // ???

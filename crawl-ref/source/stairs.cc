@@ -45,6 +45,7 @@
 #include "prompt.h"
 #include "religion.h"
 #include "shout.h"
+#include "sound.h"
 #include "spl-clouds.h"
 #include "spl-damage.h"
 #include "spl-other.h"
@@ -921,6 +922,9 @@ void floor_transition(dungeon_feature_type how,
     // Actually change the player's branch and depth, along with some cleanup.
     _player_change_level_reset();
     _player_change_level(whither);
+#ifdef USE_SOUND
+    parse_sound(going_up ? STAIRS_UP_SOUND : STAIRS_DOWN_SOUND);
+#endif
 
     // Some branch specific messages.
     if (old_level.branch == BRANCH_VESTIBULE
